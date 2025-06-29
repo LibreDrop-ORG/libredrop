@@ -8,6 +8,7 @@ Telodoy is a cross-platform file sharing app built with Flutter. It allows users
 - Detect other users broadcasting on the network.
 - List available peers and select one to send files.
 - Works on macOS, Linux and Android.
+- On-screen debug log shows discovery events.
 
 ## Getting Started
 
