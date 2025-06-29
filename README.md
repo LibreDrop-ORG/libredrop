@@ -27,6 +27,16 @@ You can also use the link icon to enter an IP address and connect directly. Once
 connected, devices automatically exchange an emoji. On Android, ensure the
 device is connected to Wi-Fi so its IP can be detected.
 
+### Android permissions
+
+The release version of the app requires the `INTERNET` permission to open
+network sockets. Ensure the following line is present in
+`android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET"/>
+```
+
 
 ### macOS permissions
 
