@@ -9,7 +9,9 @@ Telodoy is a cross-platform file sharing app built with Flutter. It allows users
 - List available peers and select one to send files.
 - Works on macOS, Linux and Android.
 - On-screen debug log shows discovery events.
-- Display your device's IP and manually connect to another IP.
+- Display your device's IP and manually connect to another IP. Connection
+  attempts show success or failure in the debug log.
+
 
 ## Getting Started
 
@@ -21,7 +23,10 @@ flutter run
 ```
 
 The app will display other devices running Telodoy on the same network. Tap a peer to select a file and send it.
-You can also use the link icon to enter an IP address and connect directly. Once connected, devices automatically exchange an emoji.
+You can also use the link icon to enter an IP address and connect directly. Once
+connected, devices automatically exchange an emoji. On Android, ensure the
+device is connected to Wi-Fi so its IP can be detected.
+
 
 ### macOS permissions
 

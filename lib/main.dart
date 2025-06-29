@@ -8,16 +8,23 @@ import 'package:flutter/material.dart';
 const int connectionPort = 5678;
 
 Future<String?> getLocalIp() async {
-  final interfaces = await NetworkInterface.list(
-    type: InternetAddressType.IPv4,
-    includeLoopback: false,
-  );
-  for (final interface in interfaces) {
-    for (final addr in interface.addresses) {
-      if (!addr.isLoopback && addr.type == InternetAddressType.IPv4) {
-        return addr.address;
+  try {
+    final interfaces = await NetworkInterface.list(
+      type: InternetAddressType.IPv4,
+      includeLoopback: false,
+      includeLinkLocal: true,
+    );
+    for (final interface in interfaces) {
+      for (final addr in interface.addresses) {
+        if (addr.type == InternetAddressType.IPv4 &&
+            !addr.isLoopback &&
+            !addr.address.startsWith('169.254')) {
+          return addr.address;
+        }
       }
     }
+  } catch (_) {
+    // ignore and return null
   }
   return null;
 }
@@ -109,8 +116,13 @@ class ConnectionService {
 
   void _handleClient(Socket client) {
     onLog?.call('Client connected from ${client.remoteAddress.address}');
-    client.writeln('👋');
-    client.flush();
+    try {
+      client.writeln('👋');
+      client.flush();
+      onLog?.call('Sent hello to ${client.remoteAddress.address}');
+    } catch (e) {
+      onLog?.call('Failed to send hello: $e');
+    }
     client.listen(
       (data) => onLog?.call(
         'Received: ${utf8.decode(data).trim()} from ${client.remoteAddress.address}',
@@ -120,13 +132,23 @@ class ConnectionService {
   }
 
   Future<void> connect(String ip) async {
-    final socket = await Socket.connect(ip, connectionPort);
-    socket.listen(
-      (data) => onLog?.call('Received: ${utf8.decode(data).trim()} from $ip'),
-      onDone: socket.destroy,
-    );
-    socket.writeln('🙂');
-    await socket.flush();
+    try {
+      final socket = await Socket.connect(
+        ip,
+        connectionPort,
+        timeout: const Duration(seconds: 5),
+      );
+      onLog?.call('Connected to $ip:$connectionPort');
+      socket.listen(
+        (data) => onLog?.call('Received: ${utf8.decode(data).trim()} from $ip'),
+        onDone: socket.destroy,
+        onError: (e) => onLog?.call('Connection error: $e'),
+      );
+      socket.writeln('🙂');
+      await socket.flush();
+    } catch (e) {
+      onLog?.call('Failed to connect to $ip:$connectionPort -> $e');
+    }
   }
 
   void dispose() {
