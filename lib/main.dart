@@ -33,7 +33,10 @@ class DiscoveryService {
   static const int broadcastPort = 4567;
   static const String message = 'TELODOY';
 
+  DiscoveryService({this.onLog});
+
   final List<Peer> peers = [];
+  final void Function(String)? onLog;
   RawDatagramSocket? _socket;
   StreamSubscription<RawSocketEvent>? _subscription;
 
@@ -41,12 +44,17 @@ class DiscoveryService {
     _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
     _socket!.broadcastEnabled = true;
     _subscription = _socket!.listen(_handleEvent);
+    onLog?.call('Discovery started on port ${_socket!.port}');
     Timer.periodic(const Duration(seconds: 2), (_) => announce());
   }
 
   void announce() {
-    _socket?.send(utf8.encode(message), InternetAddress('255.255.255.255'),
-        broadcastPort);
+    _socket?.send(
+      utf8.encode(message),
+      InternetAddress('255.255.255.255'),
+      broadcastPort,
+    );
+    onLog?.call('Announced to network');
   }
 
   void _handleEvent(RawSocketEvent event) {
@@ -58,6 +66,7 @@ class DiscoveryService {
         final peer = Peer(dg.address, dg.port);
         if (!peers.any((p) => p.address == peer.address)) {
           peers.add(peer);
+          onLog?.call('Discovered peer ${peer.address.address}');
         }
       }
     }
@@ -77,11 +86,19 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final DiscoveryService _discovery = DiscoveryService();
+  late final DiscoveryService _discovery;
+  final List<String> _logs = [];
+
+  void _addLog(String msg) {
+    setState(() {
+      _logs.add(msg);
+    });
+  }
 
   @override
   void initState() {
     super.initState();
+    _discovery = DiscoveryService(onLog: _addLog);
     _discovery.start();
   }
 
@@ -92,11 +109,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _sendFile(Peer peer) async {
+    _addLog('Sending file to ${peer.address.address}');
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.single.path == null) return;
     final file = File(result.files.single.path!);
-    final socket =
-        await Socket.connect(peer.address, DiscoveryService.broadcastPort);
+    final socket = await Socket.connect(
+      peer.address,
+      DiscoveryService.broadcastPort,
+    );
     await socket.addStream(file.openRead());
     await socket.flush();
     await socket.close();
@@ -106,15 +126,45 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Telodoy Peers')),
-      body: ListView.builder(
-        itemCount: _discovery.peers.length,
-        itemBuilder: (context, index) {
-          final peer = _discovery.peers[index];
-          return ListTile(
-            title: Text(peer.address.address),
-            onTap: () => _sendFile(peer),
-          );
-        },
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Text('Peers found: ${_discovery.peers.length}'),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _discovery.peers.length,
+              itemBuilder: (context, index) {
+                final peer = _discovery.peers[index];
+                return ListTile(
+                  title: Text(peer.address.address),
+                  onTap: () => _sendFile(peer),
+                );
+              },
+            ),
+          ),
+          if (_logs.isNotEmpty)
+            Container(
+              color: Colors.black,
+              padding: const EdgeInsets.all(8),
+              height: 120,
+              child: ListView(
+                children:
+                    _logs
+                        .map(
+                          (l) => Text(
+                            l,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        )
+                        .toList(),
+              ),
+            ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _discovery.announce,
