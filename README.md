@@ -20,3 +20,10 @@ flutter run
 ```
 
 The app will display other devices running Telodoy on the same network. Tap a peer to select a file and send it.
+
+### macOS permissions
+
+When building for macOS the app runs inside the sandbox. The entitlements files
+have been configured to allow both network client and server access. If you
+modify the project, ensure `com.apple.security.network.client` and
+`com.apple.security.network.server` remain enabled so discovery works correctly.
