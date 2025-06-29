@@ -12,6 +12,7 @@ Telodoy is a cross-platform file sharing app built with Flutter. It allows users
 - Display your device's IP and manually connect to another IP. Connection
   attempts show success or failure in the debug log.
 
+
 ## Getting Started
 
 You need Flutter installed to build the app. Telodoy requires **Flutter 3.4** or later. Run the following commands:
@@ -25,6 +26,7 @@ The app will display other devices running Telodoy on the same network. Tap a pe
 You can also use the link icon to enter an IP address and connect directly. Once
 connected, devices automatically exchange an emoji. On Android, ensure the
 device is connected to Wi-Fi so its IP can be detected.
+
 
 ### macOS permissions
 
