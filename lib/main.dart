@@ -50,7 +50,6 @@ class DiscoveryService {
       InternetAddress('255.255.255.255'),
       broadcastPort,
     );
-  }
 
   void _handleEvent(RawSocketEvent event) {
     if (event == RawSocketEvent.read && _socket != null) {
@@ -98,10 +97,8 @@ class _HomePageState extends State<HomePage> {
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.single.path == null) return;
     final file = File(result.files.single.path!);
-    final socket = await Socket.connect(
-      peer.address,
-      DiscoveryService.broadcastPort,
-    );
+    final socket =
+        await Socket.connect(peer.address, DiscoveryService.broadcastPort);
     await socket.addStream(file.openRead());
     await socket.flush();
     await socket.close();
