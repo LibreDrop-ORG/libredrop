@@ -11,7 +11,7 @@ Telodoy is a cross-platform file sharing app built with Flutter. It allows users
 
 ## Getting Started
 
-You need Flutter installed to build the app. Run the following commands:
+You need Flutter installed to build the app. Telodoy requires **Flutter 3.4** or later. Run the following commands:
 
 ```bash
 flutter pub get
