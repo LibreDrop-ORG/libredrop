@@ -70,8 +70,10 @@ class DiscoveryService {
     _socket!.broadcastEnabled = true;
     _subscription = _socket!.listen(_handleEvent);
     onLog?.call('Discovery started on port ${_socket!.port}');
-    _announceTimer =
-        Timer.periodic(const Duration(seconds: 2), (_) => announce());
+    _announceTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => announce(),
+    );
   }
 
   void announce() {
@@ -106,10 +108,15 @@ class DiscoveryService {
 }
 
 class ConnectionService {
-  ConnectionService({this.onLog});
+  ConnectionService({this.onLog, this.onConnected, this.onDisconnected});
 
   final void Function(String)? onLog;
+  final VoidCallback? onConnected;
+  final VoidCallback? onDisconnected;
   ServerSocket? _server;
+  Socket? _socket;
+
+  bool get isConnected => _socket != null;
 
   Future<void> start() async {
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, connectionPort);
@@ -119,6 +126,8 @@ class ConnectionService {
 
   void _handleClient(Socket client) {
     onLog?.call('Client connected from ${client.remoteAddress.address}');
+    _socket = client;
+    onConnected?.call();
     try {
       client.writeln('👋');
       client.flush();
@@ -130,7 +139,11 @@ class ConnectionService {
       (data) => onLog?.call(
         'Received: ${utf8.decode(data).trim()} from ${client.remoteAddress.address}',
       ),
-      onDone: client.destroy,
+      onDone: _handleDisconnect,
+      onError: (e) {
+        onLog?.call('Connection error: $e');
+        _handleDisconnect();
+      },
     );
   }
 
@@ -142,10 +155,15 @@ class ConnectionService {
         timeout: const Duration(seconds: 5),
       );
       onLog?.call('Connected to $ip:$connectionPort');
+      _socket = socket;
+      onConnected?.call();
       socket.listen(
         (data) => onLog?.call('Received: ${utf8.decode(data).trim()} from $ip'),
-        onDone: socket.destroy,
-        onError: (e) => onLog?.call('Connection error: $e'),
+        onDone: _handleDisconnect,
+        onError: (e) {
+          onLog?.call('Connection error: $e');
+          _handleDisconnect();
+        },
       );
       socket.writeln('🙂');
       await socket.flush();
@@ -154,8 +172,30 @@ class ConnectionService {
     }
   }
 
+  Future<void> sendFile(File file) async {
+    if (_socket == null) {
+      onLog?.call('No active connection to send file');
+      return;
+    }
+    try {
+      onLog?.call('Sending file ${file.path}');
+      await _socket!.addStream(file.openRead());
+      await _socket!.flush();
+    } catch (e) {
+      onLog?.call('Failed to send file: $e');
+    }
+  }
+
+  void _handleDisconnect() {
+    _socket?.destroy();
+    _socket = null;
+    onDisconnected?.call();
+    onLog?.call('Connection closed');
+  }
+
   void dispose() {
     _server?.close();
+    _socket?.destroy();
   }
 }
 
@@ -169,6 +209,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late final DiscoveryService _discovery;
   late final ConnectionService _connection;
+  bool _connected = false;
   String? _localIp;
   final List<String> _logs = [];
 
@@ -182,7 +223,11 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _discovery = DiscoveryService(onLog: _addLog);
-    _connection = ConnectionService(onLog: _addLog);
+    _connection = ConnectionService(
+      onLog: _addLog,
+      onConnected: () => setState(() => _connected = true),
+      onDisconnected: () => setState(() => _connected = false),
+    );
     _discovery.start();
     _connection.start();
     getLocalIp().then((ip) {
@@ -217,28 +262,36 @@ class _HomePageState extends State<HomePage> {
     final controller = TextEditingController();
     final ip = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Connect to IP'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'Enter IP address'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Connect to IP'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(hintText: 'Enter IP address'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(controller.text),
+                child: const Text('Connect'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Connect'),
-          ),
-        ],
-      ),
     );
     if (ip != null && ip.isNotEmpty) {
       _addLog('Connecting to $ip');
       await _connection.connect(ip);
     }
+  }
+
+  Future<void> _sendFileToConnection() async {
+    final result = await FilePicker.platform.pickFiles();
+    if (result == null || result.files.single.path == null) return;
+    final file = File(result.files.single.path!);
+    await _connection.sendFile(file);
   }
 
   @override
@@ -250,6 +303,10 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: const Icon(Icons.link),
             onPressed: _promptAndConnect,
+          ),
+          IconButton(
+            icon: const Icon(Icons.attach_file),
+            onPressed: _connected ? _sendFileToConnection : null,
           ),
         ],
       ),
@@ -284,17 +341,18 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(8),
               height: 120,
               child: ListView(
-                children: _logs
-                    .map(
-                      (l) => Text(
-                        l,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    )
-                    .toList(),
+                children:
+                    _logs
+                        .map(
+                          (l) => Text(
+                            l,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        )
+                        .toList(),
               ),
             ),
         ],
