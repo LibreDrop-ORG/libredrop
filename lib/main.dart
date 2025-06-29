@@ -63,13 +63,15 @@ class DiscoveryService {
   final void Function(String)? onLog;
   RawDatagramSocket? _socket;
   StreamSubscription<RawSocketEvent>? _subscription;
+  Timer? _announceTimer;
 
   Future<void> start() async {
     _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
     _socket!.broadcastEnabled = true;
     _subscription = _socket!.listen(_handleEvent);
     onLog?.call('Discovery started on port ${_socket!.port}');
-    Timer.periodic(const Duration(seconds: 2), (_) => announce());
+    _announceTimer =
+        Timer.periodic(const Duration(seconds: 2), (_) => announce());
   }
 
   void announce() {
@@ -97,6 +99,7 @@ class DiscoveryService {
   }
 
   void dispose() {
+    _announceTimer?.cancel();
     _subscription?.cancel();
     _socket?.close();
   }
