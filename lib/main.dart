@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 const int connectionPort = 5678;
 
@@ -108,17 +110,41 @@ class DiscoveryService {
 }
 
 class ConnectionService {
-  ConnectionService({this.onLog, this.onConnected, this.onDisconnected});
+  ConnectionService({
+    this.onLog,
+    this.onConnected,
+    this.onDisconnected,
+    this.onGreeting,
+    this.onFileProgress,
+    this.onFileReceived,
+  });
 
   final void Function(String)? onLog;
   final VoidCallback? onConnected;
   final VoidCallback? onDisconnected;
+  final void Function(String)? onGreeting;
+  final void Function(int, int)? onFileProgress;
+  final void Function(File)? onFileReceived;
   ServerSocket? _server;
   Socket? _socket;
 
+  String? remoteIp;
+  String? remoteEmoji;
+
   bool get isConnected => _socket != null;
 
+  Directory? _downloads;
+
+  final List<int> _buffer = [];
+  bool _gotGreeting = false;
+  bool _receivingFile = false;
+  late String _currentFileName;
+  int _currentFileSize = 0;
+  int _bytesReceived = 0;
+  IOSink? _fileSink;
+
   Future<void> start() async {
+    _downloads = await getDownloadsDirectory();
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, connectionPort);
     onLog?.call('Listening on ${_server!.address.address}:$connectionPort');
     _server!.listen(_handleClient);
@@ -127,6 +153,7 @@ class ConnectionService {
   void _handleClient(Socket client) {
     onLog?.call('Client connected from ${client.remoteAddress.address}');
     _socket = client;
+    remoteIp = client.remoteAddress.address;
     onConnected?.call();
     try {
       client.writeln('👋');
@@ -136,9 +163,7 @@ class ConnectionService {
       onLog?.call('Failed to send hello: $e');
     }
     client.listen(
-      (data) => onLog?.call(
-        'Received: ${utf8.decode(data).trim()} from ${client.remoteAddress.address}',
-      ),
+      _onData,
       onDone: _handleDisconnect,
       onError: (e) {
         onLog?.call('Connection error: $e');
@@ -156,9 +181,10 @@ class ConnectionService {
       );
       onLog?.call('Connected to $ip:$connectionPort');
       _socket = socket;
+      remoteIp = ip;
       onConnected?.call();
       socket.listen(
-        (data) => onLog?.call('Received: ${utf8.decode(data).trim()} from $ip'),
+        _onData,
         onDone: _handleDisconnect,
         onError: (e) {
           onLog?.call('Connection error: $e');
@@ -179,6 +205,9 @@ class ConnectionService {
     }
     try {
       onLog?.call('Sending file ${file.path}');
+      final length = await file.length();
+      final name = file.uri.pathSegments.last;
+      _socket!.write('FILE:$name:$length\n');
       await _socket!.addStream(file.openRead());
       await _socket!.flush();
     } catch (e) {
@@ -187,14 +216,67 @@ class ConnectionService {
   }
 
   void _handleDisconnect() {
+    _fileSink?.close();
     _socket?.destroy();
     _socket = null;
     onDisconnected?.call();
     onLog?.call('Connection closed');
   }
 
+  void _onData(Uint8List data) async {
+    _buffer.addAll(data);
+    while (true) {
+      if (_receivingFile) {
+        final remaining = _currentFileSize - _bytesReceived;
+        if (_buffer.length < remaining) {
+          _fileSink?.add(_buffer);
+          _bytesReceived += _buffer.length;
+          onFileProgress?.call(_bytesReceived, _currentFileSize);
+          _buffer.clear();
+          return;
+        } else {
+          _fileSink?.add(_buffer.sublist(0, remaining));
+          _bytesReceived += remaining;
+          onFileProgress?.call(_bytesReceived, _currentFileSize);
+          await _fileSink?.flush();
+          await _fileSink?.close();
+          final file = File('${_downloads?.path ?? ''}/$_currentFileName');
+          onFileReceived?.call(file);
+          _buffer.removeRange(0, remaining);
+          _receivingFile = false;
+          _bytesReceived = 0;
+          continue;
+        }
+      }
+
+      final newlineIndex = _buffer.indexOf(10); // '\n'
+      if (newlineIndex == -1) {
+        return;
+      }
+      final line = utf8.decode(_buffer.sublist(0, newlineIndex));
+      _buffer.removeRange(0, newlineIndex + 1);
+      if (!_gotGreeting) {
+        remoteEmoji = line.trim();
+        _gotGreeting = true;
+        onGreeting?.call(remoteEmoji!);
+      } else if (line.startsWith('FILE:')) {
+        final parts = line.split(':');
+        if (parts.length == 3) {
+          _currentFileName = parts[1];
+          _currentFileSize = int.tryParse(parts[2]) ?? 0;
+          final file = File('${_downloads?.path ?? ''}/$_currentFileName');
+          _fileSink = file.openWrite();
+          _receivingFile = true;
+        }
+      } else {
+        onLog?.call('Received: $line');
+      }
+    }
+  }
+
   void dispose() {
     _server?.close();
+    _fileSink?.close();
     _socket?.destroy();
   }
 }
@@ -211,6 +293,9 @@ class _HomePageState extends State<HomePage> {
   late final ConnectionService _connection;
   bool _connected = false;
   String? _localIp;
+  String? _remoteIp;
+  String? _remoteEmoji;
+  double? _progress;
   final List<String> _logs = [];
 
   void _addLog(String msg) {
@@ -226,7 +311,27 @@ class _HomePageState extends State<HomePage> {
     _connection = ConnectionService(
       onLog: _addLog,
       onConnected: () => setState(() => _connected = true),
-      onDisconnected: () => setState(() => _connected = false),
+      onDisconnected: () {
+        setState(() {
+          _connected = false;
+          _remoteEmoji = null;
+          _remoteIp = null;
+          _progress = null;
+        });
+      },
+      onGreeting: (e) {
+        setState(() {
+          _remoteEmoji = e;
+          _remoteIp = _connection.remoteIp;
+        });
+      },
+      onFileProgress: (r, t) {
+        setState(() => _progress = r / t);
+      },
+      onFileReceived: (f) {
+        setState(() => _progress = null);
+        _addLog('Saved file ${f.path}');
+      },
     );
     _discovery.start();
     _connection.start();
@@ -253,6 +358,9 @@ class _HomePageState extends State<HomePage> {
       peer.address,
       DiscoveryService.broadcastPort,
     );
+    final length = await file.length();
+    final name = file.uri.pathSegments.last;
+    socket.write('FILE:$name:$length\n');
     await socket.addStream(file.openRead());
     await socket.flush();
     await socket.close();
@@ -262,24 +370,23 @@ class _HomePageState extends State<HomePage> {
     final controller = TextEditingController();
     final ip = await showDialog<String>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Connect to IP'),
-            content: TextField(
-              controller: controller,
-              decoration: const InputDecoration(hintText: 'Enter IP address'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(controller.text),
-                child: const Text('Connect'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Connect to IP'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: 'Enter IP address'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Connect'),
+          ),
+        ],
+      ),
     );
     if (ip != null && ip.isNotEmpty) {
       _addLog('Connecting to $ip');
@@ -317,9 +424,16 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_localIp != null) Text("Your IP: $_localIp"),
+                if (_localIp != null) Text('Your IP: $_localIp'),
                 const SizedBox(height: 4),
-                Text("Peers found: ${_discovery.peers.length}"),
+                if (_remoteIp != null && _remoteEmoji != null)
+                  Text('Connected to $_remoteIp $_remoteEmoji'),
+                if (_progress != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: LinearProgressIndicator(value: _progress),
+                  ),
+                Text('Peers found: ${_discovery.peers.length}'),
               ],
             ),
           ),
@@ -341,18 +455,17 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(8),
               height: 120,
               child: ListView(
-                children:
-                    _logs
-                        .map(
-                          (l) => Text(
-                            l,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        )
-                        .toList(),
+                children: _logs
+                    .map(
+                      (l) => Text(
+                        l,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    )
+                    .toList(),
               ),
             ),
         ],
