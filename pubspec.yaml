@@ -10,6 +10,8 @@ dependencies:
     sdk: flutter
   file_picker: ^10.2.0
   path_provider: ^2.1.2
+  shared_preferences: ^2.2.2
+  open_filex: ^4.0.0
 
 dev_dependencies:
   flutter_test:

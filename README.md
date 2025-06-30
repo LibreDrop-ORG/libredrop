@@ -11,12 +11,13 @@ Telodoy is a cross-platform file sharing app built with Flutter. It allows users
 - On-screen debug log shows discovery events.
 - Display your device's IP and manually connect to another IP. Connection
   attempts show success or failure in the debug log.
-- After connecting, use the attach file icon to send a file through the
-  established link.
+- After connecting, use the menu to send a file through the established link.
 - When connected, the remote IP and greeting emoji are shown.
-- Received files are saved to your system's Downloads folder and a progress bar
-  indicates transfer status. Each incoming file displays its own progress bar
-  with the file name and you can tap it to see the file size and location.
+- Received files are saved in your chosen directory (defaulting to Downloads).
+  Each incoming file shows its own progress bar and you can tap the file name
+  to open it with your system's default application.
+- A Settings screen lets you pick the folder used to store transfers and the
+  choice persists between launches.
 
 
 ## Getting Started
@@ -30,9 +31,9 @@ flutter run
 
 The app will display other devices running Telodoy on the same network. Tap a peer to select a file and send it.
 You can also use the link icon to enter an IP address and connect directly. Once
-connected, devices automatically exchange an emoji and the attach file icon
-becomes enabled for sending data. On Android, ensure the device is connected to
-Wi-Fi so its IP can be detected.
+connected, devices automatically exchange an emoji and the "Enviar archivo"
+menu option becomes enabled for sending data. On Android, ensure the device is
+connected to Wi-Fi so its IP can be detected.
 
 ### Android permissions
 

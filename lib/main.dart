@@ -5,7 +5,10 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'settings_page.dart';
+import 'settings_service.dart';
 
 const int connectionPort = 5678;
 
@@ -117,6 +120,7 @@ class ConnectionService {
     this.onFileStarted,
     this.onFileProgress,
     this.onFileReceived,
+    this.downloadsPath,
   });
 
   final void Function(String)? onLog;
@@ -126,6 +130,7 @@ class ConnectionService {
   final void Function(String, int)? onFileStarted;
   final void Function(int, int)? onFileProgress;
   final void Function(File)? onFileReceived;
+  String? downloadsPath;
   ServerSocket? _server;
   Socket? _socket;
 
@@ -144,8 +149,24 @@ class ConnectionService {
   int _bytesReceived = 0;
   IOSink? _fileSink;
 
+  Future<void> setDownloadPath(String? path) async {
+    downloadsPath = path;
+    if (path == null) {
+      try {
+        _downloads = await getDownloadsDirectory();
+      } catch (_) {
+        _downloads = Directory.systemTemp;
+      }
+    } else {
+      _downloads = Directory(path);
+      if (!await _downloads!.exists()) {
+        await _downloads!.create(recursive: true);
+      }
+    }
+  }
+
   Future<void> start() async {
-    _downloads = await getDownloadsDirectory();
+    await setDownloadPath(downloadsPath);
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, connectionPort);
     onLog?.call('Listening on ${_server!.address.address}:$connectionPort');
     _server!.listen(_handleClient);
@@ -316,10 +337,12 @@ class _FileTransfer {
 class _HomePageState extends State<HomePage> {
   late final DiscoveryService _discovery;
   late final ConnectionService _connection;
+  late final SettingsService _settings;
   bool _connected = false;
   String? _localIp;
   String? _remoteIp;
   String? _remoteEmoji;
+  String? _downloadsPath;
   final List<_FileTransfer> _transfers = [];
   _FileTransfer? _activeTransfer;
   final List<String> _logs = [];
@@ -334,6 +357,7 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _discovery = DiscoveryService(onLog: _addLog);
+    _settings = SettingsService();
     _connection = ConnectionService(
       onLog: _addLog,
       onConnected: () => setState(() => _connected = true),
@@ -378,6 +402,12 @@ class _HomePageState extends State<HomePage> {
     );
     _discovery.start();
     _connection.start();
+    _settings.loadDownloadPath().then((p) async {
+      await _connection.setDownloadPath(p);
+      setState(() {
+        _downloadsPath = p;
+      });
+    });
     getLocalIp().then((ip) {
       setState(() {
         _localIp = ip;
@@ -410,24 +440,23 @@ class _HomePageState extends State<HomePage> {
     final controller = TextEditingController();
     final ip = await showDialog<String>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Connect to IP'),
-            content: TextField(
-              controller: controller,
-              decoration: const InputDecoration(hintText: 'Enter IP address'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(controller.text),
-                child: const Text('Connect'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Connect to IP'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: 'Enter IP address'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Connect'),
+          ),
+        ],
+      ),
     );
     if (ip != null && ip.isNotEmpty) {
       _addLog('Connecting to $ip');
@@ -442,23 +471,17 @@ class _HomePageState extends State<HomePage> {
     await _connection.sendFile(file);
   }
 
-  void _showFileInfo(_FileTransfer transfer) {
-    showDialog<void>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Text(transfer.name),
-            content: Text(
-              'Size: ${transfer.size} bytes\nSaved at: ${transfer.path ?? 'Saving...'}',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+  Future<void> _openSettings() async {
+    final path = await Navigator.push<String?>(
+      context,
+      MaterialPageRoute(
+          builder: (context) => SettingsPage(currentPath: _downloadsPath)),
     );
+    if (path != null) {
+      await _settings.saveDownloadPath(path);
+      await _connection.setDownloadPath(path);
+      setState(() => _downloadsPath = path);
+    }
   }
 
   @override
@@ -467,13 +490,35 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('Telodoy Peers'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.link),
-            onPressed: _promptAndConnect,
-          ),
-          IconButton(
-            icon: const Icon(Icons.attach_file),
-            onPressed: _connected ? _sendFileToConnection : null,
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              switch (value) {
+                case 'connect':
+                  _promptAndConnect();
+                  break;
+                case 'send':
+                  if (_connected) _sendFileToConnection();
+                  break;
+                case 'settings':
+                  _openSettings();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'connect',
+                child: Text('Conectar a IP'),
+              ),
+              PopupMenuItem(
+                value: 'send',
+                enabled: _connected,
+                child: const Text('Enviar archivo'),
+              ),
+              const PopupMenuItem(
+                value: 'settings',
+                child: Text('Settings'),
+              ),
+            ],
           ),
         ],
       ),
@@ -491,17 +536,27 @@ class _HomePageState extends State<HomePage> {
                 ..._transfers.map(
                   (t) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: GestureDetector(
-                      onTap: () => _showFileInfo(t),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: LinearProgressIndicator(value: t.progress),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: LinearProgressIndicator(value: t.progress),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: t.path != null
+                              ? () => OpenFilex.open(t.path!)
+                              : null,
+                          child: Text(
+                            t.name,
+                            style: TextStyle(
+                              color: t.path != null ? Colors.blue : null,
+                              decoration: t.path != null
+                                  ? TextDecoration.underline
+                                  : null,
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          Text(t.name),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -527,18 +582,17 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(8),
               height: 120,
               child: ListView(
-                children:
-                    _logs
-                        .map(
-                          (l) => Text(
-                            l,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        )
-                        .toList(),
+                children: _logs
+                    .map(
+                      (l) => Text(
+                        l,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    )
+                    .toList(),
               ),
             ),
         ],
