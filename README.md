@@ -51,3 +51,6 @@ When building for macOS the app runs inside the sandbox. The entitlements files
 have been configured to allow both network client and server access. If you
 modify the project, ensure `com.apple.security.network.client` and
 `com.apple.security.network.server` remain enabled so discovery works correctly.
+To access files chosen via the dialog and save incoming files in `Downloads`
+also enable `com.apple.security.files.user-selected.read-write` and
+`com.apple.security.files.downloads.read-write`.
