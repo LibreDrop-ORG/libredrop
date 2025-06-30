@@ -84,7 +84,6 @@ class DiscoveryService {
       InternetAddress('255.255.255.255'),
       broadcastPort,
     );
-    onLog?.call('Announced to network');
   }
 
   void _handleEvent(RawSocketEvent event) {
@@ -115,6 +114,7 @@ class ConnectionService {
     this.onConnected,
     this.onDisconnected,
     this.onGreeting,
+    this.onFileStarted,
     this.onFileProgress,
     this.onFileReceived,
   });
@@ -123,6 +123,7 @@ class ConnectionService {
   final VoidCallback? onConnected;
   final VoidCallback? onDisconnected;
   final void Function(String)? onGreeting;
+  final void Function(String, int)? onFileStarted;
   final void Function(int, int)? onFileProgress;
   final void Function(File)? onFileReceived;
   ServerSocket? _server;
@@ -216,7 +217,19 @@ class ConnectionService {
   }
 
   void _handleDisconnect() {
-    _fileSink?.close();
+    if (_receivingFile) {
+      _fileSink?.add(_buffer);
+      _bytesReceived += _buffer.length;
+      _buffer.clear();
+      _fileSink?.flush();
+      _fileSink?.close();
+      final file = File('${_downloads?.path ?? ''}/$_currentFileName');
+      onFileReceived?.call(file);
+      _receivingFile = false;
+      _bytesReceived = 0;
+    } else {
+      _fileSink?.close();
+    }
     _socket?.destroy();
     _socket = null;
     onDisconnected?.call();
@@ -267,6 +280,7 @@ class ConnectionService {
           final file = File('${_downloads?.path ?? ''}/$_currentFileName');
           _fileSink = file.openWrite();
           _receivingFile = true;
+          onFileStarted?.call(_currentFileName, _currentFileSize);
         }
       } else {
         onLog?.call('Received: $line');
@@ -288,6 +302,17 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+class _FileTransfer {
+  _FileTransfer({required this.name, required this.size});
+
+  final String name;
+  final int size;
+  String? path;
+  int received = 0;
+
+  double get progress => size == 0 ? 0 : received / size;
+}
+
 class _HomePageState extends State<HomePage> {
   late final DiscoveryService _discovery;
   late final ConnectionService _connection;
@@ -295,7 +320,8 @@ class _HomePageState extends State<HomePage> {
   String? _localIp;
   String? _remoteIp;
   String? _remoteEmoji;
-  double? _progress;
+  final List<_FileTransfer> _transfers = [];
+  _FileTransfer? _activeTransfer;
   final List<String> _logs = [];
 
   void _addLog(String msg) {
@@ -316,7 +342,7 @@ class _HomePageState extends State<HomePage> {
           _connected = false;
           _remoteEmoji = null;
           _remoteIp = null;
-          _progress = null;
+          _activeTransfer = null;
         });
       },
       onGreeting: (e) {
@@ -325,11 +351,28 @@ class _HomePageState extends State<HomePage> {
           _remoteIp = _connection.remoteIp;
         });
       },
+      onFileStarted: (name, size) {
+        setState(() {
+          _activeTransfer = _FileTransfer(name: name, size: size);
+          _transfers.add(_activeTransfer!);
+        });
+      },
       onFileProgress: (r, t) {
-        setState(() => _progress = r / t);
+        setState(() {
+          if (_activeTransfer != null) {
+            _activeTransfer!.received = r;
+          }
+        });
       },
       onFileReceived: (f) {
-        setState(() => _progress = null);
+        setState(() {
+          if (_activeTransfer != null) {
+            _activeTransfer!
+              ..path = f.path
+              ..received = _activeTransfer!.size;
+            _activeTransfer = null;
+          }
+        });
         _addLog('Saved file ${f.path}');
       },
     );
@@ -354,10 +397,7 @@ class _HomePageState extends State<HomePage> {
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.single.path == null) return;
     final file = File(result.files.single.path!);
-    final socket = await Socket.connect(
-      peer.address,
-      DiscoveryService.broadcastPort,
-    );
+    final socket = await Socket.connect(peer.address, connectionPort);
     final length = await file.length();
     final name = file.uri.pathSegments.last;
     socket.write('FILE:$name:$length\n');
@@ -370,23 +410,24 @@ class _HomePageState extends State<HomePage> {
     final controller = TextEditingController();
     final ip = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Connect to IP'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'Enter IP address'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Connect to IP'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(hintText: 'Enter IP address'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(controller.text),
+                child: const Text('Connect'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Connect'),
-          ),
-        ],
-      ),
     );
     if (ip != null && ip.isNotEmpty) {
       _addLog('Connecting to $ip');
@@ -399,6 +440,25 @@ class _HomePageState extends State<HomePage> {
     if (result == null || result.files.single.path == null) return;
     final file = File(result.files.single.path!);
     await _connection.sendFile(file);
+  }
+
+  void _showFileInfo(_FileTransfer transfer) {
+    showDialog<void>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(transfer.name),
+            content: Text(
+              'Size: ${transfer.size} bytes\nSaved at: ${transfer.path ?? 'Saving...'}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
   }
 
   @override
@@ -428,11 +488,23 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 4),
                 if (_remoteIp != null && _remoteEmoji != null)
                   Text('Connected to $_remoteIp $_remoteEmoji'),
-                if (_progress != null)
-                  Padding(
+                ..._transfers.map(
+                  (t) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: LinearProgressIndicator(value: _progress),
+                    child: GestureDetector(
+                      onTap: () => _showFileInfo(t),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: LinearProgressIndicator(value: t.progress),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(t.name),
+                        ],
+                      ),
+                    ),
                   ),
+                ),
                 Text('Peers found: ${_discovery.peers.length}'),
               ],
             ),
@@ -455,17 +527,18 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(8),
               height: 120,
               child: ListView(
-                children: _logs
-                    .map(
-                      (l) => Text(
-                        l,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    )
-                    .toList(),
+                children:
+                    _logs
+                        .map(
+                          (l) => Text(
+                            l,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        )
+                        .toList(),
               ),
             ),
         ],
