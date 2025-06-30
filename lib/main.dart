@@ -217,7 +217,19 @@ class ConnectionService {
   }
 
   void _handleDisconnect() {
-    _fileSink?.close();
+    if (_receivingFile) {
+      _fileSink?.add(_buffer);
+      _bytesReceived += _buffer.length;
+      _buffer.clear();
+      _fileSink?.flush();
+      _fileSink?.close();
+      final file = File('${_downloads?.path ?? ''}/$_currentFileName');
+      onFileReceived?.call(file);
+      _receivingFile = false;
+      _bytesReceived = 0;
+    } else {
+      _fileSink?.close();
+    }
     _socket?.destroy();
     _socket = null;
     onDisconnected?.call();
@@ -385,10 +397,7 @@ class _HomePageState extends State<HomePage> {
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.single.path == null) return;
     final file = File(result.files.single.path!);
-    final socket = await Socket.connect(
-      peer.address,
-      DiscoveryService.broadcastPort,
-    );
+    final socket = await Socket.connect(peer.address, connectionPort);
     final length = await file.length();
     final name = file.uri.pathSegments.last;
     socket.write('FILE:$name:$length\n');
