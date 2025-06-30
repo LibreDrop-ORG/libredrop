@@ -120,6 +120,9 @@ class ConnectionService {
     this.onFileStarted,
     this.onFileProgress,
     this.onFileReceived,
+    this.onSendStarted,
+    this.onSendProgress,
+    this.onSendComplete,
     this.downloadsPath,
   });
 
@@ -130,6 +133,9 @@ class ConnectionService {
   final void Function(String, int)? onFileStarted;
   final void Function(int, int)? onFileProgress;
   final void Function(File)? onFileReceived;
+  final void Function(String, int)? onSendStarted;
+  final void Function(int, int)? onSendProgress;
+  final VoidCallback? onSendComplete;
   String? downloadsPath;
   ServerSocket? _server;
   Socket? _socket;
@@ -148,6 +154,26 @@ class ConnectionService {
   int _currentFileSize = 0;
   int _bytesReceived = 0;
   IOSink? _fileSink;
+
+  bool _sendingFile = false;
+  int _bytesSent = 0;
+  int _totalToSend = 0;
+  Completer<void>? _ackCompleter;
+
+  void cancelTransfer() {
+    if (_sendingFile) {
+      _sendingFile = false;
+      _socket?.writeln('CANCEL');
+      _socket?.flush();
+    }
+    if (_receivingFile) {
+      _receivingFile = false;
+      _bytesReceived = 0;
+      _fileSink?.close();
+      _socket?.writeln('CANCEL');
+      _socket?.flush();
+    }
+  }
 
   Future<void> setDownloadPath(String? path) async {
     downloadsPath = path;
@@ -225,15 +251,37 @@ class ConnectionService {
       onLog?.call('No active connection to send file');
       return;
     }
-    try {
-      onLog?.call('Sending file ${file.path}');
-      final length = await file.length();
-      final name = file.uri.pathSegments.last;
-      _socket!.write('FILE:$name:$length\n');
-      await _socket!.addStream(file.openRead());
-      await _socket!.flush();
-    } catch (e) {
-      onLog?.call('Failed to send file: $e');
+
+    _sendingFile = true;
+    _bytesSent = 0;
+    _totalToSend = await file.length();
+    final name = file.uri.pathSegments.last;
+    onSendStarted?.call(name, _totalToSend);
+
+    while (_sendingFile) {
+      try {
+        onLog?.call('Sending file ${file.path}');
+        _socket!.write('FILE:$name:$_totalToSend\n');
+        await for (final chunk in file.openRead()) {
+          if (!_sendingFile) break;
+          _socket!.add(chunk);
+          _bytesSent += chunk.length;
+          onSendProgress?.call(_bytesSent, _totalToSend);
+        }
+        await _socket!.flush();
+        _ackCompleter = Completer<void>();
+        await _ackCompleter!.future;
+        _sendingFile = false;
+      } catch (e) {
+        onLog?.call('Send failed: $e, retrying...');
+        await Future.delayed(const Duration(seconds: 1));
+        if (_socket == null && remoteIp != null) {
+          await connect(remoteIp!);
+        }
+      }
+    }
+    if (!_sendingFile) {
+      onSendComplete?.call();
     }
   }
 
@@ -255,6 +303,14 @@ class ConnectionService {
     _socket = null;
     onDisconnected?.call();
     onLog?.call('Connection closed');
+
+    if (_sendingFile &&
+        (_ackCompleter != null && !_ackCompleter!.isCompleted)) {
+      // try to reconnect and resend
+      if (remoteIp != null) {
+        connect(remoteIp!);
+      }
+    }
   }
 
   void _onData(Uint8List data) async {
@@ -276,6 +332,8 @@ class ConnectionService {
           await _fileSink?.close();
           final file = File('${_downloads?.path ?? ''}/$_currentFileName');
           onFileReceived?.call(file);
+          _socket?.writeln('ACK');
+          await _socket?.flush();
           _buffer.removeRange(0, remaining);
           _receivingFile = false;
           _bytesReceived = 0;
@@ -303,6 +361,13 @@ class ConnectionService {
           _receivingFile = true;
           onFileStarted?.call(_currentFileName, _currentFileSize);
         }
+      } else if (line.trim() == 'ACK' && _ackCompleter != null) {
+        _ackCompleter?.complete();
+        _ackCompleter = null;
+      } else if (line.trim() == 'CANCEL') {
+        _sendingFile = false;
+        _receivingFile = false;
+        _ackCompleter?.completeError('cancelled');
       } else {
         onLog?.call('Received: $line');
       }
@@ -324,14 +389,21 @@ class HomePage extends StatefulWidget {
 }
 
 class _FileTransfer {
-  _FileTransfer({required this.name, required this.size});
+  _FileTransfer({
+    required this.name,
+    required this.size,
+    required this.sending,
+  });
 
   final String name;
   final int size;
+  final bool sending;
   String? path;
-  int received = 0;
+  int transferred = 0;
+  bool cancelled = false;
 
-  double get progress => size == 0 ? 0 : received / size;
+  double get progress => size == 0 ? 0 : transferred / size;
+  int get percentage => (progress * 100).clamp(0, 100).toInt();
 }
 
 class _HomePageState extends State<HomePage> {
@@ -344,7 +416,8 @@ class _HomePageState extends State<HomePage> {
   String? _remoteEmoji;
   String? _downloadsPath;
   final List<_FileTransfer> _transfers = [];
-  _FileTransfer? _activeTransfer;
+  _FileTransfer? _activeReceiveTransfer;
+  _FileTransfer? _activeSendTransfer;
   final List<String> _logs = [];
 
   void _addLog(String msg) {
@@ -366,7 +439,8 @@ class _HomePageState extends State<HomePage> {
           _connected = false;
           _remoteEmoji = null;
           _remoteIp = null;
-          _activeTransfer = null;
+          _activeReceiveTransfer = null;
+          _activeSendTransfer = null;
         });
       },
       onGreeting: (e) {
@@ -377,27 +451,56 @@ class _HomePageState extends State<HomePage> {
       },
       onFileStarted: (name, size) {
         setState(() {
-          _activeTransfer = _FileTransfer(name: name, size: size);
-          _transfers.add(_activeTransfer!);
+          _activeReceiveTransfer = _FileTransfer(
+            name: name,
+            size: size,
+            sending: false,
+          );
+          _transfers.add(_activeReceiveTransfer!);
         });
       },
       onFileProgress: (r, t) {
         setState(() {
-          if (_activeTransfer != null) {
-            _activeTransfer!.received = r;
+          if (_activeReceiveTransfer != null) {
+            _activeReceiveTransfer!.transferred = r;
           }
         });
       },
       onFileReceived: (f) {
         setState(() {
-          if (_activeTransfer != null) {
-            _activeTransfer!
+          if (_activeReceiveTransfer != null) {
+            _activeReceiveTransfer!
               ..path = f.path
-              ..received = _activeTransfer!.size;
-            _activeTransfer = null;
+              ..transferred = _activeReceiveTransfer!.size;
+            _activeReceiveTransfer = null;
           }
         });
         _addLog('Saved file ${f.path}');
+      },
+      onSendStarted: (name, size) {
+        setState(() {
+          _activeSendTransfer = _FileTransfer(
+            name: name,
+            size: size,
+            sending: true,
+          );
+          _transfers.add(_activeSendTransfer!);
+        });
+      },
+      onSendProgress: (s, t) {
+        setState(() {
+          if (_activeSendTransfer != null) {
+            _activeSendTransfer!.transferred = s;
+          }
+        });
+      },
+      onSendComplete: () {
+        setState(() {
+          if (_activeSendTransfer != null) {
+            _activeSendTransfer!.transferred = _activeSendTransfer!.size;
+            _activeSendTransfer = null;
+          }
+        });
       },
     );
     _discovery.start();
@@ -427,13 +530,8 @@ class _HomePageState extends State<HomePage> {
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.single.path == null) return;
     final file = File(result.files.single.path!);
-    final socket = await Socket.connect(peer.address, connectionPort);
-    final length = await file.length();
-    final name = file.uri.pathSegments.last;
-    socket.write('FILE:$name:$length\n');
-    await socket.addStream(file.openRead());
-    await socket.flush();
-    await socket.close();
+    await _connection.connect(peer.address.address);
+    await _connection.sendFile(file);
   }
 
   Future<void> _promptAndConnect() async {
@@ -475,7 +573,8 @@ class _HomePageState extends State<HomePage> {
     final path = await Navigator.push<String?>(
       context,
       MaterialPageRoute(
-          builder: (context) => SettingsPage(currentPath: _downloadsPath)),
+        builder: (context) => SettingsPage(currentPath: _downloadsPath),
+      ),
     );
     if (path != null) {
       await _settings.saveDownloadPath(path);
@@ -539,8 +638,33 @@ class _HomePageState extends State<HomePage> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: LinearProgressIndicator(value: t.progress),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: LinearProgressIndicator(
+                                  value: t.progress,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text('${t.percentage}%'),
+                            ],
+                          ),
                         ),
+                        if (t.progress < 1 && !t.cancelled)
+                          IconButton(
+                            icon: const Icon(Icons.cancel),
+                            onPressed: () {
+                              _connection.cancelTransfer();
+                              setState(() {
+                                t.cancelled = true;
+                                if (t.sending) {
+                                  _activeSendTransfer = null;
+                                } else {
+                                  _activeReceiveTransfer = null;
+                                }
+                              });
+                            },
+                          ),
                         const SizedBox(width: 8),
                         GestureDetector(
                           onTap: t.path != null

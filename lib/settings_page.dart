@@ -35,9 +35,11 @@ class _SettingsPageState extends State<SettingsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_path == null
-                ? 'Using default downloads directory.'
-                : 'Save files to: $_path'),
+            Text(
+              _path == null
+                  ? 'Using default downloads directory.'
+                  : 'Save files to: $_path',
+            ),
             const SizedBox(height: 8),
             ElevatedButton(
               onPressed: _choosePath,
