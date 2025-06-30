@@ -45,6 +45,7 @@ class WebRTCService {
   bool _sendingFile = false;
   int _bytesSent = 0;
   int _totalToSend = 0;
+  Completer<void>? _ackCompleter;
 
   Future<void> createPeer({required bool initiator}) async {
     final config = {
@@ -134,6 +135,8 @@ class WebRTCService {
       }
     } else if (text.trim() == 'ACK') {
       _sendingFile = false;
+      _ackCompleter?.complete();
+      _ackCompleter = null;
       onSendComplete?.call();
     }
   }
@@ -160,21 +163,31 @@ class WebRTCService {
     while (_channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
       await Future.delayed(const Duration(milliseconds: 100));
     }
-    _sendingFile = true;
-    _bytesSent = 0;
     _totalToSend = await file.length();
     final name = file.uri.pathSegments.last;
-    onSendStarted?.call(name, _totalToSend);
+    while (true) {
+      _sendingFile = true;
+      _bytesSent = 0;
+      onSendStarted?.call(name, _totalToSend);
+      _ackCompleter = Completer<void>();
 
-    _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
-    await for (final chunk in file.openRead()) {
-      if (!_sendingFile) break;
-      _channel!
-          .send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(chunk)));
-      _bytesSent += chunk.length;
-      onSendProgress?.call(_bytesSent, _totalToSend);
+      _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
+      await for (final chunk in file.openRead()) {
+        if (!_sendingFile) break;
+        _channel!
+            .send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(chunk)));
+        _bytesSent += chunk.length;
+        onSendProgress?.call(_bytesSent, _totalToSend);
+      }
+
+      try {
+        await _ackCompleter!.future.timeout(const Duration(seconds: 5));
+        break;
+      } on TimeoutException {
+        // retry
+        await Future.delayed(const Duration(seconds: 1));
+      }
     }
-    // Waiting for ACK is not implemented
   }
 
   void dispose() {
