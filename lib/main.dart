@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'webrtc_service.dart';
 import 'settings_page.dart';
 import 'settings_service.dart';
 
@@ -139,6 +140,7 @@ class ConnectionService {
   String? downloadsPath;
   ServerSocket? _server;
   Socket? _socket;
+  WebRTCService? _webrtc;
 
   String? remoteIp;
   String? remoteEmoji;
@@ -159,6 +161,26 @@ class ConnectionService {
   int _bytesSent = 0;
   int _totalToSend = 0;
   Completer<void>? _ackCompleter;
+
+  void _initWebRTC({required bool initiator}) {
+    _webrtc?.dispose();
+    _webrtc = WebRTCService(
+      onSignal: (type, data) {
+        final msg = jsonEncode({'type': type, 'data': data});
+        _socket?.writeln('WEBRTC:$msg');
+        _socket?.flush();
+      },
+      onConnected: () => onLog?.call('WebRTC connected'),
+      onDisconnected: () => onLog?.call('WebRTC disconnected'),
+      onFileStarted: onFileStarted,
+      onFileProgress: onFileProgress,
+      onFileReceived: onFileReceived,
+      onSendStarted: onSendStarted,
+      onSendProgress: onSendProgress,
+      onSendComplete: onSendComplete,
+    );
+    unawaited(_webrtc!.createPeer(initiator: initiator));
+  }
 
   void cancelTransfer() {
     if (_sendingFile) {
@@ -203,6 +225,7 @@ class ConnectionService {
     _socket = client;
     remoteIp = client.remoteAddress.address;
     onConnected?.call();
+    _initWebRTC(initiator: false);
     try {
       client.writeln('👋');
       client.flush();
@@ -231,6 +254,7 @@ class ConnectionService {
       _socket = socket;
       remoteIp = ip;
       onConnected?.call();
+      _initWebRTC(initiator: true);
       socket.listen(
         _onData,
         onDone: _handleDisconnect,
@@ -247,6 +271,10 @@ class ConnectionService {
   }
 
   Future<void> sendFile(File file) async {
+    if (_webrtc != null) {
+      await _webrtc!.sendFile(file);
+      return;
+    }
     if (_socket == null) {
       onLog?.call('No active connection to send file');
       return;
@@ -301,6 +329,8 @@ class ConnectionService {
     }
     _socket?.destroy();
     _socket = null;
+    _webrtc?.dispose();
+    _webrtc = null;
     onDisconnected?.call();
     onLog?.call('Connection closed');
 
@@ -361,6 +391,11 @@ class ConnectionService {
           _receivingFile = true;
           onFileStarted?.call(_currentFileName, _currentFileSize);
         }
+      } else if (line.startsWith('WEBRTC:')) {
+        final msg = jsonDecode(line.substring(7));
+        final type = msg['type'] as String;
+        final data = Map<String, dynamic>.from(msg['data'] as Map);
+        await _webrtc?.handleSignal(type, data);
       } else if (line.trim() == 'ACK' && _ackCompleter != null) {
         _ackCompleter?.complete();
         _ackCompleter = null;
@@ -378,6 +413,7 @@ class ConnectionService {
     _server?.close();
     _fileSink?.close();
     _socket?.destroy();
+    _webrtc?.dispose();
   }
 }
 
