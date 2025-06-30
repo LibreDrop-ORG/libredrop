@@ -12,6 +12,7 @@ dependencies:
   path_provider: ^2.1.2
   shared_preferences: ^2.2.2
   open_filex: ^4.0.0
+  flutter_webrtc: ^0.9.41
 
 dev_dependencies:
   flutter_test:
