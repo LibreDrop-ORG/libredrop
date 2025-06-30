@@ -14,8 +14,10 @@ Telodoy is a cross-platform file sharing app built with Flutter. It allows users
 - After connecting, use the menu to send a file through the established link.
 - When connected, the remote IP and greeting emoji are shown.
 - Received files are saved in your chosen directory (defaulting to Downloads).
-  Each incoming file shows its own progress bar and you can tap the file name
-  to open it with your system's default application.
+  Each transfer shows a progress bar with percentage and can be cancelled.
+  Progress is visible on both sending and receiving ends. The app automatically
+  retries sending if the connection drops until the transfer completes or is
+  cancelled. Transfers now use WebRTC data channels for greater reliability.
 - A Settings screen lets you pick the folder used to store transfers and the
   choice persists between launches.
 
