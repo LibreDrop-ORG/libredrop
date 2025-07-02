@@ -45,7 +45,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Telodoy',
+      title: 'OpenDrop',
       theme: ThemeData(primarySwatch: Colors.blue),
       home: const HomePage(),
     );
@@ -61,7 +61,7 @@ class Peer {
 
 class DiscoveryService {
   static const int broadcastPort = 4567;
-  static const String message = 'TELODOY';
+  static const String message = 'OPENDROP';
 
   DiscoveryService({this.onLog});
 
@@ -574,23 +574,24 @@ class _HomePageState extends State<HomePage> {
     final controller = TextEditingController();
     final ip = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Connect to IP'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'Enter IP address'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Connect to IP'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(hintText: 'Enter IP address'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(controller.text),
+                child: const Text('Connect'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Connect'),
-          ),
-        ],
-      ),
     );
     if (ip != null && ip.isNotEmpty) {
       _addLog('Connecting to $ip');
@@ -623,7 +624,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Telodoy Peers'),
+        title: const Text('OpenDrop Peers'),
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -639,21 +640,22 @@ class _HomePageState extends State<HomePage> {
                   break;
               }
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'connect',
-                child: Text('Conectar a IP'),
-              ),
-              PopupMenuItem(
-                value: 'send',
-                enabled: _connected,
-                child: const Text('Enviar archivo'),
-              ),
-              const PopupMenuItem(
-                value: 'settings',
-                child: Text('Settings'),
-              ),
-            ],
+            itemBuilder:
+                (context) => [
+                  const PopupMenuItem(
+                    value: 'connect',
+                    child: Text('Conectar a IP'),
+                  ),
+                  PopupMenuItem(
+                    value: 'send',
+                    enabled: _connected,
+                    child: const Text('Enviar archivo'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'settings',
+                    child: Text('Settings'),
+                  ),
+                ],
           ),
         ],
       ),
@@ -703,16 +705,18 @@ class _HomePageState extends State<HomePage> {
                           ),
                         const SizedBox(width: 8),
                         GestureDetector(
-                          onTap: t.path != null
-                              ? () => OpenFilex.open(t.path!)
-                              : null,
+                          onTap:
+                              t.path != null
+                                  ? () => OpenFilex.open(t.path!)
+                                  : null,
                           child: Text(
                             t.name,
                             style: TextStyle(
                               color: t.path != null ? Colors.blue : null,
-                              decoration: t.path != null
-                                  ? TextDecoration.underline
-                                  : null,
+                              decoration:
+                                  t.path != null
+                                      ? TextDecoration.underline
+                                      : null,
                             ),
                           ),
                         ),
@@ -742,17 +746,18 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(8),
               height: 120,
               child: ListView(
-                children: _logs
-                    .map(
-                      (l) => Text(
-                        l,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    )
-                    .toList(),
+                children:
+                    _logs
+                        .map(
+                          (l) => Text(
+                            l,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        )
+                        .toList(),
               ),
             ),
         ],

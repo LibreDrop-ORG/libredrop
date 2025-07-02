@@ -1,6 +1,6 @@
-# Telodoy
+# OpenDrop
 
-Telodoy is a cross-platform file sharing app built with Flutter. It allows users on the same local network to discover each other using UDP broadcast and exchange files.
+OpenDrop is a cross-platform file sharing app built with Flutter. It allows users on the same local network to discover each other using UDP broadcast and exchange files.
 
 ## Features
 
@@ -25,16 +25,16 @@ Telodoy is a cross-platform file sharing app built with Flutter. It allows users
 
 ## Getting Started
 
-You need Flutter installed to build the app. Telodoy requires **Flutter 3.4** or later. Run the following commands:
+You need Flutter installed to build the app. OpenDrop requires **Flutter 3.4** or later. Run the following commands:
 
 ```bash
 flutter pub get
 flutter run
 ```
 
-The app will display other devices running Telodoy on the same network. Tap a peer to select a file and send it.
+The app will display other devices running OpenDrop on the same network. Tap a peer to select a file and send it.
 You can also use the link icon to enter an IP address and connect directly. Once
-connected, devices automatically exchange an emoji and the "Enviar archivo"
+connected, devices automatically exchange an emoji and the "Send File"
 menu option becomes enabled for sending data. On Android, ensure the device is
 connected to Wi-Fi so its IP can be detected.
 

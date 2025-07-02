@@ -1,6 +1,6 @@
 {
-    "name": "telodoy",
-    "short_name": "telodoy",
+    "name": "opendrop",
+    "short_name": "opendrop",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
