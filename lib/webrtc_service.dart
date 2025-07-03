@@ -215,7 +215,13 @@ class WebRTCService {
 
   void dispose() {
     _fileSink?.close();
-    _channel?.close();
+    try {
+      _channel?.close();
+    } catch (e) {
+      debugLog('Error closing data channel: $e');
+    }
     _peer?.close();
+    _channel = null;
+    _peer = null;
   }
 }
