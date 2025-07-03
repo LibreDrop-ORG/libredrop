@@ -101,6 +101,10 @@ class WebRTCService {
           data['sdp'] as String,
           data['type'] as String,
         );
+        if (desc.type == 'answer') {
+          final current = await _peer!.getRemoteDescription();
+          if (current != null) return;
+        }
         await _peer!.setRemoteDescription(desc);
         if (desc.type == 'offer') {
           final answer = await _peer!.createAnswer();
