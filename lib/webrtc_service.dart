@@ -126,6 +126,7 @@ class WebRTCService {
         _sendingFile = false;
         if (_ackCompleter != null && !_ackCompleter!.isCompleted) {
           _ackCompleter!.completeError(StateError('channel closed'));
+          unawaited(_ackCompleter!.future.catchError((_) {}));
           _ackCompleter = null;
         }
       }
