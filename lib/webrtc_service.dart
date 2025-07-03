@@ -260,7 +260,8 @@ class WebRTCService {
 
   Future<void> _waitForBuffer() async {
     while (_channel != null &&
-        _channel!.bufferedAmount >= _channel!.bufferedAmountLowThreshold) {
+        _channel!.bufferedAmount >=
+            (_channel!.bufferedAmountLowThreshold ?? 0)) {
       await Future.delayed(const Duration(milliseconds: 50));
     }
   }
