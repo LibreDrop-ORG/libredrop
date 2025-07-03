@@ -35,6 +35,51 @@ Future<String?> getLocalIp() async {
   return null;
 }
 
+Future<String?> chooseLocalIp(BuildContext context) async {
+  try {
+    final interfaces = await NetworkInterface.list(
+      type: InternetAddressType.IPv4,
+      includeLoopback: false,
+      includeLinkLocal: true,
+    );
+    final options = <MapEntry<String, String>>[];
+    for (final interface in interfaces) {
+      for (final addr in interface.addresses) {
+        if (addr.type == InternetAddressType.IPv4 &&
+            !addr.isLoopback &&
+            !addr.address.startsWith('169.254')) {
+          options.add(MapEntry(interface.name, addr.address));
+        }
+      }
+    }
+    if (options.isEmpty) return null;
+    if (options.length == 1) return options.first.value;
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Select IP'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options
+                .map(
+                  (e) => ListTile(
+                    title: Text(e.value),
+                    subtitle: Text(e.key),
+                    onTap: () => Navigator.of(context).pop(e.value),
+                  ),
+                )
+                .toList(),
+          ),
+        );
+      },
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
 void main() {
   runApp(const MyApp());
 }
@@ -547,7 +592,8 @@ class _HomePageState extends State<HomePage> {
         _downloadsPath = p;
       });
     });
-    getLocalIp().then((ip) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final ip = await chooseLocalIp(context);
       setState(() {
         _localIp = ip;
       });

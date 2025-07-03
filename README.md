@@ -11,6 +11,8 @@ OpenDrop is a cross-platform file sharing app built with Flutter. It allows user
 - On-screen debug log shows discovery events.
 - Display your device's IP and manually connect to another IP. Connection
   attempts show success or failure in the debug log.
+- If multiple local IP addresses are detected at startup, a dialog lists each
+  interface and IP so you can choose which one to use.
 - After connecting, use the menu to send a file through the established link.
 - When connected, the remote IP and greeting emoji are shown.
 - Received files are saved in your chosen directory (defaulting to Downloads).
