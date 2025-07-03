@@ -1,3 +1,19 @@
+// OpenDrop - Local network file sharing app
+// Copyright (C) 2025 Pablo Javier Etcheverry
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -718,6 +734,10 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Image.asset(
+                  'assets/logo.png',
+                  height: 80,
+                ),
                 if (_localIp != null) Text('Your IP: $_localIp'),
                 const SizedBox(height: 4),
                 if (_remoteIp != null && _remoteEmoji != null)

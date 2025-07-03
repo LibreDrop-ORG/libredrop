@@ -61,3 +61,15 @@ modify the project, ensure `com.apple.security.network.client` and
 To access files chosen via the dialog and save incoming files in `Downloads`
 also enable `com.apple.security.files.user-selected.read-write` and
 `com.apple.security.files.downloads.read-write`.
+
+## Logo
+
+Place your application logo at `assets/logo.png` in PNG format. A size of
+256x256 pixels or larger is recommended. The logo is displayed on the home
+screen when the app launches. Update `pubspec.yaml` if you rename the file or
+use additional formats.
+
+## License
+
+OpenDrop is distributed under the terms of the GNU General Public License
+version 3. See the [LICENSE](LICENSE) file for full details.
