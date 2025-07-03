@@ -115,7 +115,12 @@ class WebRTCService {
           data['type'] as String,
         );
         if (desc.type == 'answer') {
-          final current = await _peer!.getRemoteDescription();
+          RTCSessionDescription? current;
+          try {
+            current = await _peer!.getRemoteDescription();
+          } catch (_) {
+            current = null;
+          }
           if (current != null) return;
         }
         await _peer!.setRemoteDescription(desc);
@@ -138,7 +143,12 @@ class WebRTCService {
             data['sdpMid'] as String?,
             data['sdpMLineIndex'] as int?,
           );
-          final current = await _peer!.getRemoteDescription();
+          RTCSessionDescription? current;
+          try {
+            current = await _peer!.getRemoteDescription();
+          } catch (_) {
+            current = null;
+          }
           if (current == null) {
             _pendingCandidates.add(cand);
             debugLog('Queued ICE candidate');
