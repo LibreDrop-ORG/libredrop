@@ -19,9 +19,10 @@ OpenDrop is a cross-platform file sharing app built with Flutter. It allows user
 - Received files are saved in your chosen directory (defaulting to Downloads).
   Each transfer shows a progress bar with percentage and can be cancelled.
   Progress is visible on both sending and receiving ends. The app automatically
-  retries sending if the connection drops until the transfer completes or is
+-  retries sending if the connection drops until the transfer completes or is
     cancelled. Transfers now use WebRTC data channels for greater reliability
-    through the `flutter_webrtc` 0.14 plugin.
+    through the `flutter_webrtc` 0.14 plugin. Large transfers throttle
+    the data channel buffer to avoid premature connection closes.
 - A Settings screen lets you pick the folder used to store transfers and the
   choice persists between launches.
 
