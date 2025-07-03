@@ -209,11 +209,13 @@ class ConnectionService {
   int _totalToSend = 0;
   Completer<void>? _ackCompleter;
 
-  void _initWebRTC({required bool initiator}) {
+  Future<void> _initWebRTC({required bool initiator}) async {
+    onLog?.call('Initializing WebRTC (initiator: $initiator)');
     _webrtc?.dispose();
     _webrtc = WebRTCService(
       onSignal: (type, data) {
         final msg = jsonEncode({'type': type, 'data': data});
+        debugLog('Sending WebRTC signal: $type');
         _socket?.writeln('WEBRTC:$msg');
         _socket?.flush();
       },
@@ -226,7 +228,7 @@ class ConnectionService {
       onSendProgress: onSendProgress,
       onSendComplete: onSendComplete,
     );
-    unawaited(_webrtc!.createPeer(initiator: initiator));
+    await _webrtc!.createPeer(initiator: initiator);
   }
 
   void cancelTransfer() {
@@ -267,12 +269,12 @@ class ConnectionService {
     _server!.listen(_handleClient);
   }
 
-  void _handleClient(Socket client) {
+  void _handleClient(Socket client) async {
     onLog?.call('Client connected from ${client.remoteAddress.address}');
     _socket = client;
     remoteIp = client.remoteAddress.address;
     onConnected?.call();
-    _initWebRTC(initiator: false);
+    await _initWebRTC(initiator: false);
     try {
       client.writeln('👋');
       client.flush();
@@ -301,7 +303,7 @@ class ConnectionService {
       _socket = socket;
       remoteIp = ip;
       onConnected?.call();
-      _initWebRTC(initiator: true);
+      await _initWebRTC(initiator: true);
       socket.listen(
         _onData,
         onDone: _handleDisconnect,
@@ -438,11 +440,12 @@ class ConnectionService {
           _receivingFile = true;
           onFileStarted?.call(_currentFileName, _currentFileSize);
         }
-      } else if (line.startsWith('WEBRTC:')) {
-        final msg = jsonDecode(line.substring(7));
-        final type = msg['type'] as String;
-        final data = Map<String, dynamic>.from(msg['data'] as Map);
-        await _webrtc?.handleSignal(type, data);
+        } else if (line.startsWith('WEBRTC:')) {
+          final msg = jsonDecode(line.substring(7));
+          final type = msg['type'] as String;
+          final data = Map<String, dynamic>.from(msg['data'] as Map);
+          debugLog('Received WebRTC signal: $type');
+          await _webrtc?.handleSignal(type, data);
       } else if (line.trim() == 'ACK' && _ackCompleter != null) {
         _ackCompleter?.complete();
         _ackCompleter = null;

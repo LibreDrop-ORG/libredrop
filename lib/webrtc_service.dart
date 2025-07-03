@@ -102,6 +102,10 @@ class WebRTCService {
 
   Future<void> handleSignal(String type, Map<String, dynamic> data) async {
     debugLog('Handling signal: $type');
+    if (_peer == null) {
+      debugLog('Peer not ready when signal "$type" received');
+      return;
+    }
     switch (type) {
       case 'sdp':
         final desc = RTCSessionDescription(
