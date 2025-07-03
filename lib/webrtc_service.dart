@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:path_provider/path_provider.dart';
+import 'debug.dart';
 
 typedef SignalCallback = void Function(String type, Map<String, dynamic> data);
 
@@ -49,12 +50,14 @@ class WebRTCService {
 
 
   Future<void> createPeer({required bool initiator}) async {
+    debugLog('Creating peer, initiator: $initiator');
     final config = {
       'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
       ],
     };
     _peer = await createPeerConnection(config);
+    debugLog('Peer connection created');
     _peer!.onIceCandidate = (candidate) {
       onSignal('ice', candidate.toMap());
     };
@@ -84,6 +87,7 @@ class WebRTCService {
 
   void _setupChannel() {
     if (_channel == null) return;
+    debugLog('Setting up data channel');
     _channel!.onMessage = (message) {
       if (message.isBinary) {
         _handleBinary(message.binary);
@@ -91,10 +95,13 @@ class WebRTCService {
         _handleText(message.text);
       }
     };
-    _channel!.onDataChannelState = (state) {};
+    _channel!.onDataChannelState = (state) {
+      debugLog('Data channel state: $state');
+    };
   }
 
   Future<void> handleSignal(String type, Map<String, dynamic> data) async {
+    debugLog('Handling signal: $type');
     switch (type) {
       case 'sdp':
         final desc = RTCSessionDescription(
@@ -106,6 +113,7 @@ class WebRTCService {
           if (current != null) return;
         }
         await _peer!.setRemoteDescription(desc);
+        debugLog('Set remote description type: ${desc.type}');
         if (desc.type == 'offer') {
           final answer = await _peer!.createAnswer();
           await _peer!.setLocalDescription(answer);
@@ -121,12 +129,14 @@ class WebRTCService {
             data['sdpMLineIndex'] as int?,
           );
           await _peer!.addCandidate(cand);
+          debugLog('Added ICE candidate');
         }
         break;
     }
   }
 
   Future<void> _handleText(String text) async {
+    debugLog('Received text message: $text');
     if (text.startsWith('FILE:')) {
       final parts = text.split(':');
       if (parts.length == 3) {
@@ -136,18 +146,21 @@ class WebRTCService {
         final file = File('${dir!.path}/$_currentFileName');
         _fileSink = file.openWrite();
         _bytesReceived = 0;
+        debugLog('Start receiving $_currentFileName of size $_currentFileSize');
         onFileStarted?.call(_currentFileName, _currentFileSize);
       }
     } else if (text.trim() == 'ACK') {
       _sendingFile = false;
       _ackCompleter?.complete();
       _ackCompleter = null;
+      debugLog('Received ACK');
       onSendComplete?.call();
     }
   }
 
   Future<void> _handleBinary(Uint8List data) async {
     if (_fileSink == null) return;
+    debugLog('Received ${data.length} bytes');
     _fileSink!.add(data);
     _bytesReceived += data.length;
     onFileProgress?.call(_bytesReceived, _currentFileSize);
@@ -165,12 +178,14 @@ class WebRTCService {
 
   Future<void> sendFile(File file) async {
     if (_channel == null) return;
+    debugLog('Preparing to send file ${file.path}');
     while (_channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
       await Future.delayed(const Duration(milliseconds: 100));
     }
     _totalToSend = await file.length();
     final name = file.uri.pathSegments.last;
     while (true) {
+      debugLog('Sending file iteration');
       _sendingFile = true;
       _bytesSent = 0;
       onSendStarted?.call(name, _totalToSend);
@@ -183,13 +198,16 @@ class WebRTCService {
             .send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(chunk)));
         _bytesSent += chunk.length;
         onSendProgress?.call(_bytesSent, _totalToSend);
+        debugLog('Sent ${chunk.length} bytes');
       }
 
       try {
         await _ackCompleter!.future.timeout(const Duration(seconds: 5));
+        debugLog('Send completed');
         break;
       } on TimeoutException {
         // retry
+        debugLog('ACK timeout, retrying');
         await Future.delayed(const Duration(seconds: 1));
       }
     }

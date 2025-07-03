@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'webrtc_service.dart';
 import 'settings_page.dart';
 import 'settings_service.dart';
+import 'debug.dart';
 
 const int connectionPort = 5678;
 
@@ -80,7 +81,8 @@ Future<String?> chooseLocalIp(BuildContext context) async {
   }
 }
 
-void main() {
+void main(List<String> args) {
+  debugEnabled = args.contains('-debug') || args.contains('--debug');
   runApp(const MyApp());
 }
 
@@ -502,6 +504,7 @@ class _HomePageState extends State<HomePage> {
   final List<String> _logs = [];
 
   void _addLog(String msg) {
+    debugLog(msg);
     setState(() {
       _logs.add(msg);
     });
