@@ -66,6 +66,9 @@ class WebRTCService {
   int _totalToSend = 0;
   Completer<void>? _ackCompleter;
 
+  bool get _channelOpen =>
+      _channel?.state == RTCDataChannelState.RTCDataChannelOpen;
+
 
   Future<void> createPeer({required bool initiator}) async {
     debugLog('Creating peer, initiator: $initiator');
@@ -116,6 +119,11 @@ class WebRTCService {
     };
     _channel!.onDataChannelState = (state) {
       debugLog('Data channel state: $state');
+      if (state == RTCDataChannelState.RTCDataChannelClosing ||
+          state == RTCDataChannelState.RTCDataChannelClosed) {
+        _sendingFile = false;
+        _ackCompleter?.completeError(StateError('channel closed'));
+      }
     };
   }
 
@@ -222,7 +230,7 @@ class WebRTCService {
   Future<void> sendFile(File file) async {
     if (_channel == null) return;
     debugLog('Preparing to send file ${file.path}');
-    while (_channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
+    while (!_channelOpen) {
       await Future.delayed(const Duration(milliseconds: 100));
     }
     _totalToSend = await file.length();
@@ -234,16 +242,34 @@ class WebRTCService {
       onSendStarted?.call(name, _totalToSend);
       _ackCompleter = Completer<void>();
 
+      if (!_channelOpen) {
+        debugLog('Data channel not open, aborting send');
+        break;
+      }
       _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
       await for (final chunk in file.openRead()) {
         if (!_sendingFile) break;
+        if (!_channelOpen) {
+          debugLog('Data channel closed while sending');
+          _sendingFile = false;
+          break;
+        }
         // Wait for the buffered amount to drop to avoid closing the channel
         await _waitForBuffer();
-        _channel!
-            .send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(chunk)));
+        if (!_channelOpen) {
+          debugLog('Data channel closed before sending chunk');
+          _sendingFile = false;
+          break;
+        }
+        _channel!.send(
+            RTCDataChannelMessage.fromBinary(Uint8List.fromList(chunk)));
         _bytesSent += chunk.length;
         onSendProgress?.call(_bytesSent, _totalToSend);
         debugLog('Sent ${chunk.length} bytes');
+      }
+
+      if (!_sendingFile || !_channelOpen) {
+        break;
       }
 
       try {
@@ -254,12 +280,16 @@ class WebRTCService {
         // retry
         debugLog('ACK timeout, retrying');
         await Future.delayed(const Duration(seconds: 1));
+      } catch (e) {
+        debugLog('Send aborted: $e');
+        break;
       }
     }
   }
 
   Future<void> _waitForBuffer() async {
     while (_channel != null &&
+        _channel!.state == RTCDataChannelState.RTCDataChannelOpen &&
         (_channel!.bufferedAmount ?? 0) >=
             (_channel!.bufferedAmountLowThreshold ?? 0)) {
       await Future.delayed(const Duration(milliseconds: 50));
