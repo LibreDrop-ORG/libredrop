@@ -106,6 +106,7 @@ class WebRTCService {
   void _setupChannel() {
     if (_channel == null) return;
     debugLog('Setting up data channel');
+    _channel!.bufferedAmountLowThreshold = 1024 * 1024;
     _channel!.onMessage = (message) {
       if (message.isBinary) {
         _handleBinary(message.binary);
@@ -236,6 +237,8 @@ class WebRTCService {
       _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
       await for (final chunk in file.openRead()) {
         if (!_sendingFile) break;
+        // Wait for the buffered amount to drop to avoid closing the channel
+        await _waitForBuffer();
         _channel!
             .send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(chunk)));
         _bytesSent += chunk.length;
@@ -252,6 +255,13 @@ class WebRTCService {
         debugLog('ACK timeout, retrying');
         await Future.delayed(const Duration(seconds: 1));
       }
+    }
+  }
+
+  Future<void> _waitForBuffer() async {
+    while (_channel != null &&
+        _channel!.bufferedAmount >= _channel!.bufferedAmountLowThreshold) {
+      await Future.delayed(const Duration(milliseconds: 50));
     }
   }
 
