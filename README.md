@@ -61,3 +61,7 @@ modify the project, ensure `com.apple.security.network.client` and
 To access files chosen via the dialog and save incoming files in `Downloads`
 also enable `com.apple.security.files.user-selected.read-write` and
 `com.apple.security.files.downloads.read-write`.
+
+### Stability Improvements
+
+- Fixed a crash that occurred when the data channel was closed after the peer connection ended.
