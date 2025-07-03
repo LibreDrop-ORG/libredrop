@@ -109,7 +109,9 @@ class WebRTCService {
   void _setupChannel() {
     if (_channel == null) return;
     debugLog('Setting up data channel');
-    _channel!.bufferedAmountLowThreshold = 1024 * 1024;
+    // Throttle when the channel buffer exceeds 64 KB to prevent premature
+    // closes on some platforms.
+    _channel!.bufferedAmountLowThreshold = 64 * 1024;
     _channel!.onMessage = (message) {
       if (message.isBinary) {
         _handleBinary(message.binary);
