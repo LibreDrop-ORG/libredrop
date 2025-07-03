@@ -38,6 +38,8 @@ class WebRTCService {
   RTCPeerConnection? _peer;
   RTCDataChannel? _channel;
 
+  final List<RTCIceCandidate> _pendingCandidates = [];
+
   IOSink? _fileSink;
   late String _currentFileName;
   int _currentFileSize = 0;
@@ -118,6 +120,10 @@ class WebRTCService {
         }
         await _peer!.setRemoteDescription(desc);
         debugLog('Set remote description type: ${desc.type}');
+        for (final c in _pendingCandidates) {
+          await _peer!.addCandidate(c);
+        }
+        _pendingCandidates.clear();
         if (desc.type == 'offer') {
           final answer = await _peer!.createAnswer();
           await _peer!.setLocalDescription(answer);
@@ -132,8 +138,13 @@ class WebRTCService {
             data['sdpMid'] as String?,
             data['sdpMLineIndex'] as int?,
           );
-          await _peer!.addCandidate(cand);
-          debugLog('Added ICE candidate');
+          if (_peer!.remoteDescription == null) {
+            _pendingCandidates.add(cand);
+            debugLog('Queued ICE candidate');
+          } else {
+            await _peer!.addCandidate(cand);
+            debugLog('Added ICE candidate');
+          }
         }
         break;
     }
