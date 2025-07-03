@@ -122,7 +122,10 @@ class WebRTCService {
       if (state == RTCDataChannelState.RTCDataChannelClosing ||
           state == RTCDataChannelState.RTCDataChannelClosed) {
         _sendingFile = false;
-        _ackCompleter?.completeError(StateError('channel closed'));
+        if (_ackCompleter != null && !_ackCompleter!.isCompleted) {
+          _ackCompleter!.completeError(StateError('channel closed'));
+          _ackCompleter = null;
+        }
       }
     };
   }
