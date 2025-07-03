@@ -22,7 +22,7 @@ OpenDrop is a cross-platform file sharing app built with Flutter. It allows user
   retries sending if the connection drops until the transfer completes or is
   cancelled. Transfers now use WebRTC data channels for greater reliability
   through the `flutter_webrtc` 0.14 plugin. Large transfers throttle the data
-  channel buffer to avoid premature connection closes. If the data channel
+  channel buffer (now 64&nbsp;KB) to avoid premature connection closes. If the data channel
   closes unexpectedly, the transfer aborts instead of looping indefinitely.
 - A Settings screen lets you pick the folder used to store transfers and the
   choice persists between launches.
