@@ -138,7 +138,8 @@ class WebRTCService {
             data['sdpMid'] as String?,
             data['sdpMLineIndex'] as int?,
           );
-          if (_peer!.remoteDescription == null) {
+          final current = await _peer!.getRemoteDescription();
+          if (current == null) {
             _pendingCandidates.add(cand);
             debugLog('Queued ICE candidate');
           } else {
