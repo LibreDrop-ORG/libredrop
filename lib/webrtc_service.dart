@@ -110,10 +110,10 @@ class WebRTCService {
   void _setupChannel() {
     if (_channel == null) return;
     debugLog('Setting up data channel');
-    // Throttle when the channel buffer exceeds 256 KB to prevent premature
-    // closes on some platforms. This value was increased from 64 KB to allow
-    // bigger buffers when sending large files.
-    _channel!.bufferedAmountLowThreshold = 256 * 1024;
+    // Throttle when the channel buffer exceeds 32 KB to prevent premature
+    // closes on some platforms. This lower threshold keeps the backlog small
+    // so the channel isn't overwhelmed during very large transfers.
+    _channel!.bufferedAmountLowThreshold = 32 * 1024;
     _channel!.onMessage = (message) {
       if (message.isBinary) {
         _handleBinary(message.binary);
@@ -255,7 +255,7 @@ class WebRTCService {
         break;
       }
       _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
-      const chunkSize = 16 * 1024;
+      const chunkSize = 8 * 1024;
       final raf = await file.open();
       try {
         while (_bytesSent < _totalToSend) {
@@ -270,7 +270,8 @@ class WebRTCService {
           final bytes = await raf.read(min(chunkSize, remaining));
           if (bytes.isEmpty) break;
 
-          // Wait for the buffered amount to drop to avoid closing the channel
+          // Wait for the buffered amount to drop before sending to avoid
+          // overwhelming the channel on platforms with small buffers.
           await _waitForBuffer();
           if (!_channelOpen) {
             debugLog('Data channel closed before sending chunk');
@@ -283,6 +284,10 @@ class WebRTCService {
           _bytesSent += bytes.length;
           onSendProgress?.call(_bytesSent, _totalToSend);
           debugLog('Sent ${bytes.length} bytes');
+
+          // Wait again to ensure the buffered amount drops after sending. This
+          // helps prevent abrupt channel closure with very large transfers.
+          await _waitForBuffer();
         }
       } finally {
         await raf.close();
