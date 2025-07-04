@@ -99,7 +99,7 @@ Future<String?> chooseLocalIp(BuildContext context) async {
 }
 
 void main(List<String> args) {
-  debugEnabled = args.contains('-debug') || args.contains('--debug');
+  
   runApp(const MyApp());
 }
 
