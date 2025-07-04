@@ -240,72 +240,102 @@ class WebRTCService {
     while (!_channelOpen) {
       await Future.delayed(const Duration(milliseconds: 100));
     }
+
+    _sendingFile = true;
+    _bytesSent = 0;
     _totalToSend = await file.length();
     final name = file.uri.pathSegments.last;
+    onSendStarted?.call(name, _totalToSend);
+
     _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
-      const chunkSize = 64 * 1024;
-      final raf = await file.open();
-      try {
-        while (_bytesSent < _totalToSend) {
-          if (!_sendingFile) break;
-          if (!_channelOpen) {
-            debugLog('Data channel closed while sending');
-            _sendingFile = false;
-            break;
-          }
+    _ackCompleter = Completer<void>();
 
-          final remaining = _totalToSend - _bytesSent;
-          final bytes = await raf.read(min(chunkSize, remaining));
-          if (bytes.isEmpty) break;
-
-          // Wait for the buffered amount to drop before sending to avoid
-          // overwhelming the channel on platforms with small buffers.
-          await _waitForBuffer();
-          if (!_channelOpen) {
-            debugLog('Data channel closed before sending chunk');
-            _sendingFile = false;
-            break;
-          }
-
-          _channel!.send(
-              RTCDataChannelMessage.fromBinary(Uint8List.fromList(bytes)));
-          _bytesSent += bytes.length;
-          onSendProgress?.call(_bytesSent, _totalToSend);
-          debugLog('Sent ${bytes.length} bytes');
-
-          // Wait again to ensure the buffered amount drops after sending. This
-          // helps prevent abrupt channel closure with very large transfers.
-          await _waitForBuffer();
+    const chunkSize = 64 * 1024;
+    final raf = await file.open();
+    try {
+      while (_bytesSent < _totalToSend) {
+        if (!_sendingFile) break;
+        if (!_channelOpen) {
+          debugLog('Data channel closed while sending');
+          _sendingFile = false;
+          break;
         }
-      } finally {
-        await raf.close();
-      }
 
-      if (!_sendingFile || !_channelOpen) {
-        return;
-      }
+        await _waitForBuffer();
+        if (!_channelOpen) {
+          debugLog('Data channel closed before sending chunk');
+          _sendingFile = false;
+          break;
+        }
 
-      try {
-        await _ackCompleter!.future.timeout(const Duration(seconds: 30));
-        debugLog('Send completed');
-      } on TimeoutException {
-        debugLog('ACK timeout');
-        // rethrow to notify caller
-        rethrow;
-      } catch (e) {
-        debugLog('Send aborted: $e');
-        // rethrow to notify caller
-        rethrow;
+        final remaining = _totalToSend - _bytesSent;
+        final bytes = await raf.read(min(chunkSize, remaining));
+        if (bytes.isEmpty) break;
+
+        if (!_channelOpen) {
+          debugLog('Data channel closed before sending chunk');
+          _sendingFile = false;
+          break;
+        }
+
+        _channel!
+            .send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(bytes)));
+        _bytesSent += bytes.length;
+        onSendProgress?.call(_bytesSent, _totalToSend);
+        debugLog('Sent ${bytes.length} bytes');
       }
+    } finally {
+      await raf.close();
+    }
+
+    if (!_sendingFile || !_channelOpen) {
+      if (!_ackCompleter!.isCompleted) {
+        _ackCompleter!.completeError(StateError('send cancelled'));
+        unawaited(_ackCompleter!.future.catchError((_) {}));
+      }
+      return;
+    }
+
+    try {
+      await _ackCompleter!.future.timeout(const Duration(seconds: 30));
+      debugLog('Send completed');
+    } on TimeoutException {
+      debugLog('ACK timeout');
+      // rethrow to notify caller
+      rethrow;
+    } catch (e) {
+      debugLog('Send aborted: $e');
+      // rethrow to notify caller
+      rethrow;
+    }
   }
 
   Future<void> _waitForBuffer() async {
-    while (_channel != null &&
-        _channel!.state == RTCDataChannelState.RTCDataChannelOpen &&
-        (_channel!.bufferedAmount ?? 0) >=
-            (_channel!.bufferedAmountLowThreshold ?? 0)) {
-      await Future.delayed(const Duration(milliseconds: 50));
+    if (_channel == null ||
+        _channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
+      return;
     }
+    final threshold = _channel!.bufferedAmountLowThreshold ?? 0;
+    if ((_channel!.bufferedAmount ?? 0) < threshold) return;
+
+    final completer = Completer<void>();
+    Timer? timer;
+
+    void check() {
+      if (completer.isCompleted) return;
+      if ((_channel!.bufferedAmount ?? 0) < threshold) {
+        completer.complete();
+      }
+    }
+
+    _channel!.onBufferedAmountLow = (_) => check();
+
+    // Fallback timer in case the event doesn't fire.
+    timer = Timer.periodic(const Duration(milliseconds: 50), (_) => check());
+
+    await completer.future;
+    timer.cancel();
+    _channel!.onBufferedAmountLow = null;
   }
 
   void dispose() {
