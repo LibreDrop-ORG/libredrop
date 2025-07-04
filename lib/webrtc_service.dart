@@ -16,6 +16,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -109,9 +110,10 @@ class WebRTCService {
   void _setupChannel() {
     if (_channel == null) return;
     debugLog('Setting up data channel');
-    // Throttle when the channel buffer exceeds 64 KB to prevent premature
-    // closes on some platforms.
-    _channel!.bufferedAmountLowThreshold = 64 * 1024;
+    // Throttle when the channel buffer exceeds 256 KB to prevent premature
+    // closes on some platforms. This value was increased from 64 KB to allow
+    // bigger buffers when sending large files.
+    _channel!.bufferedAmountLowThreshold = 256 * 1024;
     _channel!.onMessage = (message) {
       if (message.isBinary) {
         _handleBinary(message.binary);
@@ -253,25 +255,37 @@ class WebRTCService {
         break;
       }
       _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
-      await for (final chunk in file.openRead()) {
-        if (!_sendingFile) break;
-        if (!_channelOpen) {
-          debugLog('Data channel closed while sending');
-          _sendingFile = false;
-          break;
+      const chunkSize = 16 * 1024;
+      final raf = await file.open();
+      try {
+        while (_bytesSent < _totalToSend) {
+          if (!_sendingFile) break;
+          if (!_channelOpen) {
+            debugLog('Data channel closed while sending');
+            _sendingFile = false;
+            break;
+          }
+
+          final remaining = _totalToSend - _bytesSent;
+          final bytes = await raf.read(min(chunkSize, remaining));
+          if (bytes.isEmpty) break;
+
+          // Wait for the buffered amount to drop to avoid closing the channel
+          await _waitForBuffer();
+          if (!_channelOpen) {
+            debugLog('Data channel closed before sending chunk');
+            _sendingFile = false;
+            break;
+          }
+
+          _channel!.send(
+              RTCDataChannelMessage.fromBinary(Uint8List.fromList(bytes)));
+          _bytesSent += bytes.length;
+          onSendProgress?.call(_bytesSent, _totalToSend);
+          debugLog('Sent ${bytes.length} bytes');
         }
-        // Wait for the buffered amount to drop to avoid closing the channel
-        await _waitForBuffer();
-        if (!_channelOpen) {
-          debugLog('Data channel closed before sending chunk');
-          _sendingFile = false;
-          break;
-        }
-        _channel!.send(
-            RTCDataChannelMessage.fromBinary(Uint8List.fromList(chunk)));
-        _bytesSent += chunk.length;
-        onSendProgress?.call(_bytesSent, _totalToSend);
-        debugLog('Sent ${chunk.length} bytes');
+      } finally {
+        await raf.close();
       }
 
       if (!_sendingFile || !_channelOpen) {
