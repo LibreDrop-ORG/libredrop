@@ -136,7 +136,12 @@ class DiscoveryService {
   Timer? _announceTimer;
 
   Future<void> start() async {
-    _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    _socket = await RawDatagramSocket.bind(
+      InternetAddress.anyIPv4,
+      broadcastPort,
+      reuseAddress: true,
+      reusePort: true,
+    );
     _socket!.broadcastEnabled = true;
     _subscription = _socket!.listen(_handleEvent);
     onLog?.call('Discovery started on port ${_socket!.port}');
@@ -466,12 +471,12 @@ class ConnectionService {
           _receivingFile = true;
           onFileStarted?.call(_currentFileName, _currentFileSize);
         }
-        } else if (line.startsWith('WEBRTC:')) {
-          final msg = jsonDecode(line.substring(7));
-          final type = msg['type'] as String;
-          final data = Map<String, dynamic>.from(msg['data'] as Map);
-          debugLog('Received WebRTC signal: $type');
-          await _webrtc?.handleSignal(type, data);
+      } else if (line.startsWith('WEBRTC:')) {
+        final msg = jsonDecode(line.substring(7));
+        final type = msg['type'] as String;
+        final data = Map<String, dynamic>.from(msg['data'] as Map);
+        debugLog('Received WebRTC signal: $type');
+        await _webrtc?.handleSignal(type, data);
       } else if (line.trim() == 'ACK' && _ackCompleter != null) {
         _ackCompleter?.complete();
         _ackCompleter = null;
@@ -652,24 +657,23 @@ class _HomePageState extends State<HomePage> {
     final controller = TextEditingController();
     final ip = await showDialog<String>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Connect to IP'),
-            content: TextField(
-              controller: controller,
-              decoration: const InputDecoration(hintText: 'Enter IP address'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(controller.text),
-                child: const Text('Connect'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Connect to IP'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: 'Enter IP address'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Connect'),
+          ),
+        ],
+      ),
     );
     if (ip != null && ip.isNotEmpty) {
       _addLog('Connecting to $ip');
@@ -718,22 +722,21 @@ class _HomePageState extends State<HomePage> {
                   break;
               }
             },
-            itemBuilder:
-                (context) => [
-                  const PopupMenuItem(
-                    value: 'connect',
-                    child: Text('Conectar a IP'),
-                  ),
-                  PopupMenuItem(
-                    value: 'send',
-                    enabled: _connected,
-                    child: const Text('Enviar archivo'),
-                  ),
-                  const PopupMenuItem(
-                    value: 'settings',
-                    child: Text('Settings'),
-                  ),
-                ],
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'connect',
+                child: Text('Conectar a IP'),
+              ),
+              PopupMenuItem(
+                value: 'send',
+                enabled: _connected,
+                child: const Text('Enviar archivo'),
+              ),
+              const PopupMenuItem(
+                value: 'settings',
+                child: Text('Settings'),
+              ),
+            ],
           ),
         ],
       ),
@@ -787,18 +790,16 @@ class _HomePageState extends State<HomePage> {
                           ),
                         const SizedBox(width: 8),
                         GestureDetector(
-                          onTap:
-                              t.path != null
-                                  ? () => OpenFilex.open(t.path!)
-                                  : null,
+                          onTap: t.path != null
+                              ? () => OpenFilex.open(t.path!)
+                              : null,
                           child: Text(
                             t.name,
                             style: TextStyle(
                               color: t.path != null ? Colors.blue : null,
-                              decoration:
-                                  t.path != null
-                                      ? TextDecoration.underline
-                                      : null,
+                              decoration: t.path != null
+                                  ? TextDecoration.underline
+                                  : null,
                             ),
                           ),
                         ),
@@ -828,18 +829,17 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(8),
               height: 120,
               child: ListView(
-                children:
-                    _logs
-                        .map(
-                          (l) => Text(
-                            l,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        )
-                        .toList(),
+                children: _logs
+                    .map(
+                      (l) => Text(
+                        l,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    )
+                    .toList(),
               ),
             ),
         ],
