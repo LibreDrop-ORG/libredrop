@@ -316,11 +316,13 @@ class ConnectionService {
 
   Future<void> connect(String ip) async {
     try {
-      // Ensure any previous socket is properly closed before attempting a new connection.
+      // Ensure any previous socket is properly closed and state reset before attempting a new connection.
       if (_socket != null) {
         _socket?.destroy();
         _socket = null;
       }
+      _webrtc?.dispose(); // Dispose of any existing WebRTC service
+      _webrtc = null;
 
       final socket = await Socket.connect(
         ip,
@@ -344,6 +346,12 @@ class ConnectionService {
       await socket.flush();
     } catch (e) {
       onLog?.call('Failed to connect to $ip:$connectionPort -> $e');
+      // Ensure state is reset if connection fails
+      _socket?.destroy();
+      _socket = null;
+      _webrtc?.dispose();
+      _webrtc = null;
+      onDisconnected?.call(); // Notify that connection failed/disconnected
     }
   }
 
