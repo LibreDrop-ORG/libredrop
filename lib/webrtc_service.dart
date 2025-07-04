@@ -70,7 +70,6 @@ class WebRTCService {
   bool get _channelOpen =>
       _channel?.state == RTCDataChannelState.RTCDataChannelOpen;
 
-
   Future<void> createPeer({required bool initiator}) async {
     debugLog('Creating peer, initiator: $initiator');
     final config = {
