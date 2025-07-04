@@ -110,7 +110,7 @@ class WebRTCService {
     // Throttle when the channel buffer exceeds 256 KB to prevent premature
     // closes on some platforms. This lower threshold keeps the backlog small
     // so the channel isn't overwhelmed during very large transfers.
-    _channel!.bufferedAmountLowThreshold = 256 * 1024;
+    _channel!.bufferedAmountLowThreshold = 1 * 1024 * 1024;
     _channel!.onMessage = (message) {
       if (message.isBinary) {
         _handleBinary(message.binary);
