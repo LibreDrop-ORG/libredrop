@@ -316,6 +316,12 @@ class ConnectionService {
 
   Future<void> connect(String ip) async {
     try {
+      // Ensure any previous socket is properly closed before attempting a new connection.
+      if (_socket != null) {
+        _socket?.destroy();
+        _socket = null;
+      }
+
       final socket = await Socket.connect(
         ip,
         connectionPort,

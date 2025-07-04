@@ -359,5 +359,7 @@ class WebRTCService {
     _fileSink?.close();
     _channel?.close();
     _peer?.close();
+    _channel = null;
+    _peer = null;
   }
 }
