@@ -110,10 +110,10 @@ class WebRTCService {
   void _setupChannel() {
     if (_channel == null) return;
     debugLog('Setting up data channel');
-    // Throttle when the channel buffer exceeds 128 KB to prevent premature
-    // closes on some platforms. This value was tuned to avoid disconnects when
-    // sending large files while still allowing reasonable throughput.
-    _channel!.bufferedAmountLowThreshold = 128 * 1024;
+    // Throttle when the channel buffer exceeds 32 KB to prevent premature
+    // closes on some platforms. This lower threshold keeps the backlog small
+    // so the channel isn't overwhelmed during very large transfers.
+    _channel!.bufferedAmountLowThreshold = 32 * 1024;
     _channel!.onMessage = (message) {
       if (message.isBinary) {
         _handleBinary(message.binary);
@@ -255,7 +255,7 @@ class WebRTCService {
         break;
       }
       _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
-      const chunkSize = 16 * 1024;
+      const chunkSize = 8 * 1024;
       final raf = await file.open();
       try {
         while (_bytesSent < _totalToSend) {
