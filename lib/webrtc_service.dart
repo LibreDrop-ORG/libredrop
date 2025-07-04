@@ -73,9 +73,7 @@ class WebRTCService {
   Future<void> createPeer({required bool initiator}) async {
     debugLog('Creating peer, initiator: $initiator');
     final config = {
-      'iceServers': [
-        {'urls': 'stun:stun.l.google.com:19302'},
-      ],
+      'iceServers': [],
     };
     _peer = await createPeerConnection(config);
     debugLog('Peer connection created');
@@ -254,38 +252,47 @@ class WebRTCService {
     final raf = await file.open();
     try {
       while (_bytesSent < _totalToSend) {
-        if (!_sendingFile) break;
+        if (!_sendingFile) {
+          debugLog('Sending cancelled externally.');
+          break;
+        }
         if (!_channelOpen) {
-          debugLog('Data channel closed while sending');
+          debugLog('Data channel closed while sending.');
           _sendingFile = false;
           break;
         }
 
+        debugLog('Before _waitForBuffer. Buffered amount: ${_channel!.bufferedAmount}');
         await _waitForBuffer();
+        debugLog('After _waitForBuffer. Buffered amount: ${_channel!.bufferedAmount}');
+
         if (!_channelOpen) {
-          debugLog('Data channel closed before sending chunk');
+          debugLog('Data channel closed after _waitForBuffer.');
           _sendingFile = false;
           break;
         }
 
         final remaining = _totalToSend - _bytesSent;
         final bytes = await raf.read(min(chunkSize, remaining));
-        if (bytes.isEmpty) break;
+        if (bytes.isEmpty) {
+          debugLog('No more bytes to read from file.');
+          break;
+        }
 
         if (!_channelOpen) {
-          debugLog('Data channel closed before sending chunk');
+          debugLog('Data channel closed before sending chunk (after read).');
           _sendingFile = false;
           break;
         }
 
-        _channel!
-            .send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(bytes)));
+        _channel!.send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(bytes)));
         _bytesSent += bytes.length;
         onSendProgress?.call(_bytesSent, _totalToSend);
-        debugLog('Sent ${bytes.length} bytes');
+        debugLog('Sent ${bytes.length} bytes. Total sent: $_bytesSent / $_totalToSend');
       }
     } finally {
       await raf.close();
+      debugLog('File RAF closed.');
     }
 
     if (!_sendingFile || !_channelOpen) {
@@ -318,19 +325,26 @@ class WebRTCService {
       return;
     }
     final threshold = _channel!.bufferedAmountLowThreshold ?? 0;
-    if ((_channel!.bufferedAmount ?? 0) < threshold) return;
+    final bufferedAmount = _channel!.bufferedAmount ?? 0;
+    debugLog('Waiting for buffer: current=$bufferedAmount, threshold=$threshold');
+    if (bufferedAmount < threshold) return;
 
     final completer = Completer<void>();
     Timer? timer;
 
     void check() {
       if (completer.isCompleted) return;
-      if ((_channel!.bufferedAmount ?? 0) < threshold) {
+      final currentBuffered = _channel!.bufferedAmount ?? 0;
+      debugLog('Buffer check: current=$currentBuffered, threshold=$threshold');
+      if (currentBuffered < threshold) {
         completer.complete();
       }
     }
 
-    _channel!.onBufferedAmountLow = (_) => check();
+    _channel!.onBufferedAmountLow = (_) {
+      debugLog('onBufferedAmountLow fired');
+      check();
+    };
 
     // Fallback timer in case the event doesn't fire.
     timer = Timer.periodic(const Duration(milliseconds: 50), (_) => check());
@@ -338,6 +352,7 @@ class WebRTCService {
     await completer.future;
     timer.cancel();
     _channel!.onBufferedAmountLow = null;
+    debugLog('Buffer wait complete');
   }
 
   void dispose() {
