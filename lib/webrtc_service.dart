@@ -272,6 +272,12 @@ class WebRTCService {
         final bytes = await raf.read(min(chunkSize, remaining));
         if (bytes.isEmpty) break;
 
+        if (!_channelOpen) {
+          debugLog('Data channel closed before sending chunk');
+          _sendingFile = false;
+          break;
+        }
+
         _channel!
             .send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(bytes)));
         _bytesSent += bytes.length;
@@ -290,17 +296,19 @@ class WebRTCService {
       return;
     }
 
-    try {
-      await _ackCompleter!.future.timeout(const Duration(seconds: 30));
-      debugLog('Send completed');
-    } on TimeoutException {
-      debugLog('ACK timeout');
-      // rethrow to notify caller
-      rethrow;
-    } catch (e) {
-      debugLog('Send aborted: $e');
-      // rethrow to notify caller
-      rethrow;
+    if (_ackCompleter != null) {
+      try {
+        await _ackCompleter!.future.timeout(const Duration(seconds: 30));
+        debugLog('Send completed');
+      } on TimeoutException {
+        debugLog('ACK timeout');
+        // rethrow to notify caller
+        rethrow;
+      } catch (e) {
+        debugLog('Send aborted: $e');
+        // rethrow to notify caller
+        rethrow;
+      }
     }
   }
 
