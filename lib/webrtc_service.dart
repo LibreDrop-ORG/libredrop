@@ -109,10 +109,10 @@ class WebRTCService {
   void _setupChannel() {
     if (_channel == null) return;
     debugLog('Setting up data channel');
-    // Throttle when the channel buffer exceeds 32 KB to prevent premature
+    // Throttle when the channel buffer exceeds 256 KB to prevent premature
     // closes on some platforms. This lower threshold keeps the backlog small
     // so the channel isn't overwhelmed during very large transfers.
-    _channel!.bufferedAmountLowThreshold = 32 * 1024;
+    _channel!.bufferedAmountLowThreshold = 256 * 1024;
     _channel!.onMessage = (message) {
       if (message.isBinary) {
         _handleBinary(message.binary);
@@ -242,19 +242,8 @@ class WebRTCService {
     }
     _totalToSend = await file.length();
     final name = file.uri.pathSegments.last;
-    while (true) {
-      debugLog('Sending file iteration');
-      _sendingFile = true;
-      _bytesSent = 0;
-      onSendStarted?.call(name, _totalToSend);
-      _ackCompleter = Completer<void>();
-
-      if (!_channelOpen) {
-        debugLog('Data channel not open, aborting send');
-        break;
-      }
-      _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
-      const chunkSize = 8 * 1024;
+    _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
+      const chunkSize = 64 * 1024;
       final raf = await file.open();
       try {
         while (_bytesSent < _totalToSend) {
@@ -293,22 +282,21 @@ class WebRTCService {
       }
 
       if (!_sendingFile || !_channelOpen) {
-        break;
+        return;
       }
 
       try {
-        await _ackCompleter!.future.timeout(const Duration(seconds: 5));
+        await _ackCompleter!.future.timeout(const Duration(seconds: 30));
         debugLog('Send completed');
-        break;
       } on TimeoutException {
-        // retry
-        debugLog('ACK timeout, retrying');
-        await Future.delayed(const Duration(seconds: 1));
+        debugLog('ACK timeout');
+        // rethrow to notify caller
+        rethrow;
       } catch (e) {
         debugLog('Send aborted: $e');
-        break;
+        // rethrow to notify caller
+        rethrow;
       }
-    }
   }
 
   Future<void> _waitForBuffer() async {
