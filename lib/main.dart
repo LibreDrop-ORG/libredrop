@@ -17,6 +17,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -355,13 +356,22 @@ class ConnectionService {
       try {
         onLog?.call('Sending file ${file.path}');
         _socket!.write('FILE:$name:$_totalToSend\n');
-        await for (final chunk in file.openRead()) {
-          if (!_sendingFile) break;
-          _socket!.add(chunk);
-          _bytesSent += chunk.length;
-          onSendProgress?.call(_bytesSent, _totalToSend);
+        const chunkSize = 16 * 1024;
+        final raf = await file.open();
+        try {
+          while (_bytesSent < _totalToSend) {
+            if (!_sendingFile) break;
+            final remaining = _totalToSend - _bytesSent;
+            final bytes = await raf.read(min(chunkSize, remaining));
+            if (bytes.isEmpty) break;
+            _socket!.add(bytes);
+            _bytesSent += bytes.length;
+            onSendProgress?.call(_bytesSent, _totalToSend);
+          }
+          await _socket!.flush();
+        } finally {
+          await raf.close();
         }
-        await _socket!.flush();
         _ackCompleter = Completer<void>();
         await _ackCompleter!.future;
         _sendingFile = false;
