@@ -296,17 +296,19 @@ class WebRTCService {
       return;
     }
 
-    try {
-      await _ackCompleter!.future.timeout(const Duration(seconds: 30));
-      debugLog('Send completed');
-    } on TimeoutException {
-      debugLog('ACK timeout');
-      // rethrow to notify caller
-      rethrow;
-    } catch (e) {
-      debugLog('Send aborted: $e');
-      // rethrow to notify caller
-      rethrow;
+    if (_ackCompleter != null) {
+      try {
+        await _ackCompleter!.future.timeout(const Duration(seconds: 30));
+        debugLog('Send completed');
+      } on TimeoutException {
+        debugLog('ACK timeout');
+        // rethrow to notify caller
+        rethrow;
+      } catch (e) {
+        debugLog('Send aborted: $e');
+        // rethrow to notify caller
+        rethrow;
+      }
     }
   }
 
