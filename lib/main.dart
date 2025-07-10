@@ -324,12 +324,13 @@ class ConnectionService {
       _webrtc?.dispose(); // Dispose of any existing WebRTC service
       _webrtc = null;
 
+      debugLog('Attempting to connect to $ip:$connectionPort...');
       final socket = await Socket.connect(
         ip,
         connectionPort,
         timeout: const Duration(seconds: 5),
       );
-      onLog?.call('Connected to $ip:$connectionPort');
+      debugLog('Socket.connect successful. Socket: $socket');
       _socket = socket;
       remoteIp = ip;
       onConnected?.call();
