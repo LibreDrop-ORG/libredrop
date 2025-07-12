@@ -249,6 +249,12 @@ class ConnectionService {
       onSendStarted: onSendStarted,
       onSendProgress: onSendProgress,
       onSendComplete: onSendComplete,
+      onConfigComplete: (chunkSize, bufferThreshold) {
+        onLog?.call('Negotiated config: chunkSize=$chunkSize, bufferThreshold=$bufferThreshold');
+        // These values are passed up to the HomePageState to be displayed
+        // and are not stored directly in ConnectionService.
+        // The WebRTCService itself will store and use the negotiated values.
+      },
     );
     await _webrtc!.createPeer(initiator: initiator);
   }
@@ -314,30 +320,39 @@ class ConnectionService {
     );
   }
 
-  Future<void> connect(String ip) async {
-    try {
-      final socket = await Socket.connect(
-        ip,
-        connectionPort,
-        timeout: const Duration(seconds: 5),
-      );
-      onLog?.call('Connected to $ip:$connectionPort');
-      _socket = socket;
-      remoteIp = ip;
-      onConnected?.call();
-      await _initWebRTC(initiator: true);
-      socket.listen(
-        _onData,
-        onDone: _handleDisconnect,
-        onError: (e) {
-          onLog?.call('Connection error: $e');
-          _handleDisconnect();
-        },
-      );
-      socket.writeln('🙂');
-      await socket.flush();
-    } catch (e) {
-      onLog?.call('Failed to connect to $ip:$connectionPort -> $e');
+  Future<void> connect(String ip, {int retries = 3}) async {
+    for (var i = 0; i < retries; i++) {
+      try {
+        final socket = await Socket.connect(
+          ip,
+          connectionPort,
+          timeout: const Duration(seconds: 2),
+        );
+        onLog?.call('Connected to $ip:$connectionPort');
+        _socket = socket;
+        remoteIp = ip;
+        onConnected?.call();
+        await _initWebRTC(initiator: true);
+        socket.listen(
+          _onData,
+          onDone: _handleDisconnect,
+          onError: (e) {
+            onLog?.call('Connection error: $e');
+            _handleDisconnect();
+          },
+        );
+        socket.writeln('🙂');
+        await socket.flush();
+        return; // Success, exit the loop
+      } catch (e) {
+        onLog?.call('Failed to connect to $ip:$connectionPort -> $e');
+        if (i < retries - 1) {
+          onLog?.call('Retrying in 2 seconds...');
+          await Future.delayed(const Duration(seconds: 2));
+        } else {
+          onLog?.call('Could not connect after $retries retries.');
+        }
+      }
     }
   }
 
@@ -536,6 +551,8 @@ class _HomePageState extends State<HomePage> {
   _FileTransfer? _activeReceiveTransfer;
   _FileTransfer? _activeSendTransfer;
   final List<String> _logs = [];
+  int? _negotiatedChunkSize;
+  int? _negotiatedBufferThreshold;
 
   void _addLog(String msg) {
     debugLog(msg);
@@ -634,6 +651,10 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _localIp = ip;
       });
+      if (Platform.isAndroid) {
+        _addLog('Android detected, trying to connect to host');
+        await _connection.connect('10.0.2.2');
+      }
     });
   }
 
@@ -755,6 +776,10 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 4),
                 if (_remoteIp != null && _remoteEmoji != null)
                   Text('Connected to $_remoteIp $_remoteEmoji'),
+                if (_negotiatedChunkSize != null)
+                  Text('Negotiated Chunk Size: ${_negotiatedChunkSize! / 1024} KB'),
+                if (_negotiatedBufferThreshold != null)
+                  Text('Negotiated Buffer Threshold: ${_negotiatedBufferThreshold! / 1024} KB'),
                 ..._transfers.map(
                   (t) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
