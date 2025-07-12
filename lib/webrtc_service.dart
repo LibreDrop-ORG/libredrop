@@ -80,9 +80,7 @@ class WebRTCService {
     _isInitiator = initiator;
     debugLog('Creating peer, initiator: $initiator');
     final config = {
-      'iceServers': [
-        {'urls': 'stun:stun.l.google.com:19302'},
-      ],
+      'iceServers': [],
     };
     _peer = await createPeerConnection(config);
     debugLog('Peer connection created');
@@ -119,7 +117,9 @@ class WebRTCService {
     // Throttle when the channel buffer exceeds 256 KB to prevent premature
     // closes on some platforms. This lower threshold keeps the backlog small
     // so the channel isn't overwhelmed during very large transfers.
+
     _channel!.bufferedAmountLowThreshold = 64 * 1024;
+
     _channel!.onMessage = (message) {
       if (message.isBinary) {
         _handleBinary(message.binary);
@@ -277,38 +277,45 @@ class WebRTCService {
     final raf = await file.open();
     try {
       while (_bytesSent < _totalToSend) {
-        if (!_sendingFile) break;
+        if (!_sendingFile) {
+          debugLog('Sending cancelled externally.');
+          break;
+        }
         if (!_channelOpen) {
-          debugLog('Data channel closed while sending');
+          debugLog('Data channel closed while sending.');
           _sendingFile = false;
           break;
         }
 
+        debugLog('Before _waitForBuffer. Buffered amount: ${_channel!.bufferedAmount}');
         await _waitForBuffer();
+        debugLog('After _waitForBuffer. Buffered amount: ${_channel!.bufferedAmount}');
+
         if (!_channelOpen) {
-          debugLog('Data channel closed before sending chunk');
+          debugLog('Data channel closed after _waitForBuffer.');
           _sendingFile = false;
           break;
         }
 
         final remaining = _totalToSend - _bytesSent;
+
         final bytes = await raf.read(min(actualChunkSize, remaining));
         if (bytes.isEmpty) break;
 
         if (!_channelOpen) {
-          debugLog('Data channel closed before sending chunk');
+          debugLog('Data channel closed before sending chunk (after read).');
           _sendingFile = false;
           break;
         }
 
-        _channel!
-            .send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(bytes)));
+        _channel!.send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(bytes)));
         _bytesSent += bytes.length;
         onSendProgress?.call(_bytesSent, _totalToSend);
-        debugLog('Sent ${bytes.length} bytes');
+        debugLog('Sent ${bytes.length} bytes. Total sent: $_bytesSent / $_totalToSend');
       }
     } finally {
       await raf.close();
+      debugLog('File RAF closed.');
     }
 
     if (!_sendingFile || !_channelOpen) {
@@ -359,12 +366,14 @@ class WebRTCService {
         return;
       }
       if ((_channel!.bufferedAmount ?? 0) < threshold) {
+
         completer.complete();
       }
     }
 
     // Assign the callback
     _channel!.onBufferedAmountLow = (_) => check();
+
 
     // Start a fallback timer that also checks the state.
     timer = Timer.periodic(const Duration(milliseconds: 100), (_) => check());
@@ -388,5 +397,7 @@ class WebRTCService {
     _fileSink?.close();
     _channel?.close();
     _peer?.close();
+    _channel = null;
+    _peer = null;
   }
 }

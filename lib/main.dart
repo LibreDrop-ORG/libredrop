@@ -319,7 +319,7 @@ class ConnectionService {
       },
     );
   }
-
+  
   Future<void> connect(String ip, {int retries = 3}) async {
     for (var i = 0; i < retries; i++) {
       try {
