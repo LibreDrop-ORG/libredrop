@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -40,6 +41,7 @@ class WebRTCService {
     this.onSendStarted,
     this.onSendProgress,
     this.onSendComplete,
+    this.onConfigComplete,
   });
 
   final SignalCallback onSignal;
@@ -51,9 +53,13 @@ class WebRTCService {
   final FileCallback? onSendStarted;
   final ProgressCallback? onSendProgress;
   final VoidCallback? onSendComplete;
+  final void Function(int, int)? onConfigComplete;
 
   RTCPeerConnection? _peer;
   RTCDataChannel? _channel;
+
+  bool _isInitiator = false;
+  int? negotiatedChunkSize;
 
   final List<RTCIceCandidate> _pendingCandidates = [];
 
@@ -71,6 +77,7 @@ class WebRTCService {
       _channel?.state == RTCDataChannelState.RTCDataChannelOpen;
 
   Future<void> createPeer({required bool initiator}) async {
+    _isInitiator = initiator;
     debugLog('Creating peer, initiator: $initiator');
     final config = {
       'iceServers': [],
@@ -110,7 +117,9 @@ class WebRTCService {
     // Throttle when the channel buffer exceeds 256 KB to prevent premature
     // closes on some platforms. This lower threshold keeps the backlog small
     // so the channel isn't overwhelmed during very large transfers.
-    _channel!.bufferedAmountLowThreshold = 1 * 1024 * 1024;
+
+    _channel!.bufferedAmountLowThreshold = 64 * 1024;
+
     _channel!.onMessage = (message) {
       if (message.isBinary) {
         _handleBinary(message.binary);
@@ -120,6 +129,11 @@ class WebRTCService {
     };
     _channel!.onDataChannelState = (state) {
       debugLog('Data channel state: $state');
+      if (state == RTCDataChannelState.RTCDataChannelOpen && _isInitiator) {
+        // Propose a configuration
+        final config = {'chunkSize': 16 * 1024, 'bufferThreshold': 64 * 1024};
+        _channel!.send(RTCDataChannelMessage('CONFIG:${jsonEncode(config)}'));
+      }
       if (state == RTCDataChannelState.RTCDataChannelClosing ||
           state == RTCDataChannelState.RTCDataChannelClosed) {
         _sendingFile = false;
@@ -205,6 +219,17 @@ class WebRTCService {
         debugLog('Start receiving $_currentFileName of size $_currentFileSize');
         onFileStarted?.call(_currentFileName, _currentFileSize);
       }
+    } else if (text.startsWith('CONFIG:')) {
+      final config = jsonDecode(text.substring(7));
+      final chunkSize = config['chunkSize'] as int;
+      final bufferThreshold = config['bufferThreshold'] as int;
+      negotiatedChunkSize = chunkSize;
+      _channel!.bufferedAmountLowThreshold = bufferThreshold;
+      onConfigComplete?.call(chunkSize, bufferThreshold);
+      if (!_isInitiator) {
+        // Acknowledge the config
+        _channel!.send(RTCDataChannelMessage(text));
+      }
     } else if (text.trim() == 'ACK') {
       _sendingFile = false;
       _ackCompleter?.complete();
@@ -248,7 +273,7 @@ class WebRTCService {
     _channel!.send(RTCDataChannelMessage('FILE:$name:$_totalToSend'));
     _ackCompleter = Completer<void>();
 
-    const chunkSize = 64 * 1024;
+    final actualChunkSize = negotiatedChunkSize ?? (64 * 1024);
     final raf = await file.open();
     try {
       while (_bytesSent < _totalToSend) {
@@ -273,11 +298,9 @@ class WebRTCService {
         }
 
         final remaining = _totalToSend - _bytesSent;
-        final bytes = await raf.read(min(chunkSize, remaining));
-        if (bytes.isEmpty) {
-          debugLog('No more bytes to read from file.');
-          break;
-        }
+
+        final bytes = await raf.read(min(actualChunkSize, remaining));
+        if (bytes.isEmpty) break;
 
         if (!_channelOpen) {
           debugLog('Data channel closed before sending chunk (after read).');
@@ -296,7 +319,7 @@ class WebRTCService {
     }
 
     if (!_sendingFile || !_channelOpen) {
-      if (!_ackCompleter!.isCompleted) {
+      if (_ackCompleter != null && !_ackCompleter!.isCompleted) {
         _ackCompleter!.completeError(StateError('send cancelled'));
         unawaited(_ackCompleter!.future.catchError((_) {}));
       }
@@ -320,39 +343,54 @@ class WebRTCService {
   }
 
   Future<void> _waitForBuffer() async {
-    if (_channel == null ||
-        _channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
+    if (_channel == null || _channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
       return;
     }
-    final threshold = _channel!.bufferedAmountLowThreshold ?? 0;
-    final bufferedAmount = _channel!.bufferedAmount ?? 0;
-    debugLog('Waiting for buffer: current=$bufferedAmount, threshold=$threshold');
-    if (bufferedAmount < threshold) return;
+    // Use a sensible default threshold if not set. 256KB is the default for the channel.
+    final threshold = _channel!.bufferedAmountLowThreshold ?? (256 * 1024);
+
+    // If buffer is already low, no need to wait.
+    if ((_channel!.bufferedAmount ?? 0) < threshold) {
+      return;
+    }
 
     final completer = Completer<void>();
     Timer? timer;
 
     void check() {
-      if (completer.isCompleted) return;
-      final currentBuffered = _channel!.bufferedAmount ?? 0;
-      debugLog('Buffer check: current=$currentBuffered, threshold=$threshold');
-      if (currentBuffered < threshold) {
+      // If channel is closed or completer is done, stop everything.
+      if (completer.isCompleted || _channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
+        if (!completer.isCompleted) {
+          completer.completeError(StateError('Channel closed while waiting for buffer'));
+        }
+        return;
+      }
+      if ((_channel!.bufferedAmount ?? 0) < threshold) {
+
         completer.complete();
       }
     }
 
-    _channel!.onBufferedAmountLow = (_) {
-      debugLog('onBufferedAmountLow fired');
-      check();
-    };
+    // Assign the callback
+    _channel!.onBufferedAmountLow = (_) => check();
 
-    // Fallback timer in case the event doesn't fire.
-    timer = Timer.periodic(const Duration(milliseconds: 50), (_) => check());
 
-    await completer.future;
-    timer.cancel();
-    _channel!.onBufferedAmountLow = null;
-    debugLog('Buffer wait complete');
+    // Start a fallback timer that also checks the state.
+    timer = Timer.periodic(const Duration(milliseconds: 100), (_) => check());
+
+    try {
+      // Wait for the completer to finish
+      await completer.future;
+    } catch (e) {
+      debugLog('Error while waiting for buffer: $e');
+    } finally {
+      // Cleanup
+      timer.cancel();
+      // It's good practice to nullify the callback once we're done with it.
+      if (_channel?.state == RTCDataChannelState.RTCDataChannelOpen) {
+        _channel!.onBufferedAmountLow = null;
+      }
+    }
   }
 
   void dispose() {
