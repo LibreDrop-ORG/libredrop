@@ -99,6 +99,36 @@ Future<String?> chooseLocalIp(BuildContext context) async {
 }
 
 void main(List<String> args) {
+  WidgetsFlutterBinding.ensureInitialized();
+  // ignore: avoid_print
+  print('main args: $args');
+  String? instanceName;
+  String? projectRootPath;
+
+  // Read debug mode and instance name from --dart-define
+  const bool debugModeEnabled = bool.fromEnvironment('DEBUG_MODE');
+  const String instanceNameDefine = String.fromEnvironment('INSTANCE_NAME');
+
+  if (instanceNameDefine.isNotEmpty) {
+    instanceName = instanceNameDefine;
+  } else {
+    instanceName = Platform.isAndroid ? 'android' : 'macos';
+  }
+
+  // Read project root path from --dart-define (primarily for macOS)
+  const String projectRootDefine = String.fromEnvironment('PROJECT_ROOT');
+  if (projectRootDefine.isNotEmpty) {
+    projectRootPath = projectRootDefine;
+  }
+
+  if (debugModeEnabled) {
+    // Only pass projectRootPath if not on Android, due to sandboxing
+    if (Platform.isAndroid) {
+      initializeFileLogger(instanceName!); // Android will use app support directory
+    } else {
+      initializeFileLogger(instanceName!, logDirectoryPath: projectRootPath);
+    }
+  }
   
   runApp(const MyApp());
 }
@@ -127,10 +157,24 @@ class DiscoveryService {
   static const int broadcastPort = 4567;
   static const String message = 'OPENDROP';
 
-  DiscoveryService({this.onLog});
+  DiscoveryService({this.onLog, required String localIp, this.knownPeers}) : _localIp = localIp {
+    debugLog('DiscoveryService initialized with local IP: $_localIp');
+    if (knownPeers != null) {
+      for (final ip in knownPeers!) {
+        final peer = Peer(InternetAddress(ip), connectionPort);
+        if (peer.address.address != _localIp && !peers.any((p) => p.address == peer.address)) {
+          peers.add(peer);
+          onLog?.call('Manually added known peer ${peer.address.address}');
+          debugLog('Manually added known peer ${peer.address.address}');
+        }
+      }
+    }
+  }
 
   final List<Peer> peers = [];
   final void Function(String)? onLog;
+  final String _localIp;
+  final List<String>? knownPeers;
   RawDatagramSocket? _socket;
   StreamSubscription<RawSocketEvent>? _subscription;
   Timer? _announceTimer;
@@ -145,6 +189,7 @@ class DiscoveryService {
     _socket!.broadcastEnabled = true;
     _subscription = _socket!.listen(_handleEvent);
     onLog?.call('Discovery started on port ${_socket!.port}');
+    debugLog('Discovery started on port ${_socket!.port}');
     _announceTimer = Timer.periodic(
       const Duration(seconds: 2),
       (_) => announce(),
@@ -152,6 +197,7 @@ class DiscoveryService {
   }
 
   void announce() {
+    debugLog('Sending discovery announcement.');
     _socket?.send(
       utf8.encode(message),
       InternetAddress('255.255.255.255'),
@@ -166,9 +212,13 @@ class DiscoveryService {
       final msg = utf8.decode(dg.data);
       if (msg == message) {
         final peer = Peer(dg.address, dg.port);
-        if (!peers.any((p) => p.address == peer.address)) {
+        debugLog('Received discovery message from ${peer.address.address}');
+        if (peer.address.address != _localIp && !peers.any((p) => p.address == peer.address)) {
           peers.add(peer);
           onLog?.call('Discovered peer ${peer.address.address}');
+          debugLog('Added peer ${peer.address.address}');
+        } else {
+          debugLog('Filtered out peer ${peer.address.address} (either self or already in list).');
         }
       }
     }
@@ -194,6 +244,7 @@ class ConnectionService {
     this.onSendProgress,
     this.onSendComplete,
     this.downloadsPath,
+    this.onConfigComplete,
   });
 
   final void Function(String)? onLog;
@@ -207,6 +258,7 @@ class ConnectionService {
   final void Function(int, int)? onSendProgress;
   final VoidCallback? onSendComplete;
   String? downloadsPath;
+  final void Function(int, int)? onConfigComplete;
   ServerSocket? _server;
   Socket? _socket;
   WebRTCService? _webrtc;
@@ -237,7 +289,7 @@ class ConnectionService {
     _webrtc = WebRTCService(
       onSignal: (type, data) {
         final msg = jsonEncode({'type': type, 'data': data});
-        debugLog('Sending WebRTC signal: $type');
+        debugLog('Sending WebRTC signal: $type'); // Keep for console debug
         _socket?.writeln('WEBRTC:$msg');
         _socket?.flush();
       },
@@ -250,10 +302,14 @@ class ConnectionService {
       onSendProgress: onSendProgress,
       onSendComplete: onSendComplete,
       onConfigComplete: (chunkSize, bufferThreshold) {
-        onLog?.call('Negotiated config: chunkSize=$chunkSize, bufferThreshold=$bufferThreshold');
         // These values are passed up to the HomePageState to be displayed
         // and are not stored directly in ConnectionService.
         // The WebRTCService itself will store and use the negotiated values.
+        onLog?.call('Negotiated config: chunkSize=$chunkSize, bufferThreshold=$bufferThreshold');
+        // Propagate the config to the HomePageState
+        if (onConfigComplete != null) {
+          onConfigComplete!(chunkSize, bufferThreshold);
+        }
       },
     );
     await _webrtc!.createPeer(initiator: initiator);
@@ -292,12 +348,22 @@ class ConnectionService {
 
   Future<void> start() async {
     await setDownloadPath(downloadsPath);
+    final localIp = await getLocalIp();
+    if (localIp == null) {
+      onLog?.call('Could not determine local IP address. Server will not start.');
+      debugLog('Could not determine local IP address. Server will not start.');
+      return;
+    }
+    debugLog('Attempting to bind ServerSocket to ${InternetAddress.anyIPv4.address}:$connectionPort');
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, connectionPort);
     onLog?.call('Listening on ${_server!.address.address}:$connectionPort');
+    debugLog('ServerSocket bound and listening on ${_server!.address.address}:${_server!.port}');
     _server!.listen(_handleClient);
+    debugLog('ServerSocket listening for clients.');
   }
 
   void _handleClient(Socket client) async {
+    debugLog('Received client connection from ${client.remoteAddress.address}:${client.remotePort}');
     onLog?.call('Client connected from ${client.remoteAddress.address}');
     _socket = client;
     remoteIp = client.remoteAddress.address;
@@ -321,6 +387,10 @@ class ConnectionService {
   }
   
   Future<void> connect(String ip, {int retries = 3}) async {
+    if (isConnected) {
+      debugLog('Already connected to $remoteIp, skipping connection to $ip');
+      return;
+    }
     for (var i = 0; i < retries; i++) {
       try {
         final socket = await Socket.connect(
@@ -472,10 +542,13 @@ class ConnectionService {
       }
       final line = utf8.decode(_buffer.sublist(0, newlineIndex));
       _buffer.removeRange(0, newlineIndex + 1);
+
+      bool handled = false;
       if (!_gotGreeting) {
         remoteEmoji = line.trim();
         _gotGreeting = true;
         onGreeting?.call(remoteEmoji!);
+        handled = true;
       } else if (line.startsWith('FILE:')) {
         final parts = line.split(':');
         if (parts.length == 3) {
@@ -486,20 +559,27 @@ class ConnectionService {
           _receivingFile = true;
           onFileStarted?.call(_currentFileName, _currentFileSize);
         }
+        handled = true;
       } else if (line.startsWith('WEBRTC:')) {
         final msg = jsonDecode(line.substring(7));
         final type = msg['type'] as String;
         final data = Map<String, dynamic>.from(msg['data'] as Map);
         debugLog('Received WebRTC signal: $type');
         await _webrtc?.handleSignal(type, data);
+        handled = true;
       } else if (line.trim() == 'ACK' && _ackCompleter != null) {
         _ackCompleter?.complete();
         _ackCompleter = null;
+        handled = true;
       } else if (line.trim() == 'CANCEL') {
         _sendingFile = false;
         _receivingFile = false;
         _ackCompleter?.completeError('cancelled');
-      } else {
+        handled = true;
+      }
+
+      if (!handled) {
+        // Only log general messages to UI, not WebRTC signaling
         onLog?.call('Received: $line');
       }
     }
@@ -539,7 +619,7 @@ class _FileTransfer {
 }
 
 class _HomePageState extends State<HomePage> {
-  late final DiscoveryService _discovery;
+  DiscoveryService? _discovery; // Made nullable
   late final ConnectionService _connection;
   late final SettingsService _settings;
   bool _connected = false;
@@ -555,6 +635,7 @@ class _HomePageState extends State<HomePage> {
   int? _negotiatedBufferThreshold;
 
   void _addLog(String msg) {
+    if (!mounted) return;
     debugLog(msg);
     setState(() {
       _logs.add(msg);
@@ -564,7 +645,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _discovery = DiscoveryService(onLog: _addLog);
     _settings = SettingsService();
     _connection = ConnectionService(
       onLog: _addLog,
@@ -637,31 +717,46 @@ class _HomePageState extends State<HomePage> {
           }
         });
       },
+      onConfigComplete: (chunkSize, bufferThreshold) {
+        setState(() {
+          _negotiatedChunkSize = chunkSize;
+          _negotiatedBufferThreshold = bufferThreshold;
+        });
+      },
     );
-    _discovery.start();
-    _connection.start();
+
     _settings.loadDownloadPath().then((p) async {
       await _connection.setDownloadPath(p);
       setState(() {
         _downloadsPath = p;
       });
+      _connection.start(); // Start connection service after path is set
     });
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final ip = await chooseLocalIp(context);
       setState(() {
         _localIp = ip;
       });
+
       if (Platform.isAndroid) {
+        // For Android, hardcode the host IP as a known peer
+        _discovery = DiscoveryService(onLog: _addLog, localIp: _localIp!, knownPeers: ['10.0.2.2']);
         _addLog('Android detected, trying to connect to host');
         await _connection.connect('10.0.2.2');
+      } else {
+        // For other platforms, use regular discovery
+        _discovery = DiscoveryService(onLog: _addLog, localIp: _localIp!);
       }
+      _discovery!.start(); // Start discovery service after local IP is known
     });
   }
 
   @override
   void dispose() {
-    _discovery.dispose();
+    _discovery?.dispose();
     _connection.dispose();
+    disposeFileLogger(); // Dispose the file logger
     super.dispose();
   }
 
@@ -670,7 +765,9 @@ class _HomePageState extends State<HomePage> {
     final result = await FilePicker.platform.pickFiles();
     if (result == null || result.files.single.path == null) return;
     final file = File(result.files.single.path!);
-    await _connection.connect(peer.address.address);
+    if (!_connection.isConnected) {
+      await _connection.connect(peer.address.address);
+    }
     await _connection.sendFile(file);
   }
 
@@ -832,15 +929,15 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
-                Text('Peers found: ${_discovery.peers.length}'),
+                Text('Peers found: ${_discovery?.peers.length ?? 0}'),
               ],
             ),
           ),
           Expanded(
             child: ListView.builder(
-              itemCount: _discovery.peers.length,
+              itemCount: _discovery?.peers.length ?? 0,
               itemBuilder: (context, index) {
-                final peer = _discovery.peers[index];
+                final peer = _discovery!.peers[index];
                 return ListTile(
                   title: Text(peer.address.address),
                   onTap: () => _sendFile(peer),
@@ -870,7 +967,7 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _discovery.announce,
+        onPressed: _discovery?.announce,
         child: const Icon(Icons.wifi_tethering),
       ),
     );

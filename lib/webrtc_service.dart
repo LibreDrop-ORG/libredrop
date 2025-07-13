@@ -274,6 +274,7 @@ class WebRTCService {
     _ackCompleter = Completer<void>();
 
     final actualChunkSize = negotiatedChunkSize ?? (64 * 1024);
+    debugLog('Using actualChunkSize: $actualChunkSize');
     final raf = await file.open();
     try {
       while (_bytesSent < _totalToSend) {
@@ -298,7 +299,6 @@ class WebRTCService {
         }
 
         final remaining = _totalToSend - _bytesSent;
-
         final bytes = await raf.read(min(actualChunkSize, remaining));
         if (bytes.isEmpty) break;
 
@@ -351,8 +351,11 @@ class WebRTCService {
 
     // If buffer is already low, no need to wait.
     if ((_channel!.bufferedAmount ?? 0) < threshold) {
+      debugLog('Buffer already low. No need to wait.');
       return;
     }
+
+    debugLog('Waiting for buffer to be low. Current: ${_channel!.bufferedAmount}, Threshold: $threshold');
 
     final completer = Completer<void>();
     Timer? timer;
@@ -361,12 +364,13 @@ class WebRTCService {
       // If channel is closed or completer is done, stop everything.
       if (completer.isCompleted || _channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
         if (!completer.isCompleted) {
+          debugLog('Channel closed while waiting for buffer. Completing with error.');
           completer.completeError(StateError('Channel closed while waiting for buffer'));
         }
         return;
       }
       if ((_channel!.bufferedAmount ?? 0) < threshold) {
-
+        debugLog('Buffer is now low. Completing wait.');
         completer.complete();
       }
     }
