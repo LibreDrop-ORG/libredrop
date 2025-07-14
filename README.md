@@ -1,79 +1,56 @@
-# OpenDrop
+# OpenDrop: Cross-platform AirDrop alternative with GUI
 
-OpenDrop is a cross-platform file sharing app built with Flutter. It allows users on the same local network to discover each other using UDP broadcast and exchange files.
+OpenDrop is a cross-platform file sharing app built with Flutter. It allows users on the same local network to discover each other and exchange files with a simple and intuitive GUI.
+
+## Why OpenDrop?
+
+| Feature | OpenDrop | AirDrop | CLI Tools (e.g., scp, rsync) |
+| :--- | :---: | :---: | :---: |
+| **GUI** | ✅ | ✅ | ❌ |
+| **Cross-platform** | ✅ | ❌ | ✅ |
+| **Privacy-focused** | ✅ | ✅ | ✅ |
+| **Easy to use** | ✅ | ✅ | ❌ |
 
 ## Features
 
-- Advertise presence on the local network.
-- Detect other users broadcasting on the network.
-- List available peers and select one to send files.
-- Works on macOS, Linux and Android.
-- On-screen debug log shows discovery events.
-- Running with the `-debug` option prints all logs to the console.
-- Display your device's IP and manually connect to another IP. Connection
-  attempts show success or failure in the debug log.
-- If multiple local IP addresses are detected at startup, a dialog lists each
-  interface and IP so you can choose which one to use.
-- After connecting, use the menu to send a file through the established link.
-- When connected, the remote IP and greeting emoji are shown.
-- Received files are saved in your chosen directory (defaulting to Downloads).
-  Each transfer shows a progress bar with percentage and can be cancelled.
-  Progress is visible on both sending and receiving ends. The app automatically
-  retries sending if the connection drops until the transfer completes or is
-  cancelled. Transfers now use WebRTC data channels for greater reliability
-  through the `flutter_webrtc` 0.14 plugin. Large transfers throttle the data
-  channel buffer (now 32&nbsp;KB) to avoid premature connection closes while
-  sending smaller 8&nbsp;KB chunks. The sender waits for the buffer to drop
-  below this threshold after each chunk. If the data channel
-  closes unexpectedly, the transfer aborts instead of looping indefinitely.
-- A Settings screen lets you pick the folder used to store transfers and the
-  choice persists between launches.
+- **Cross-platform:** Share files between macOS, Windows, Linux, and Android devices.
+- **GUI:** A simple and intuitive graphical user interface for easy file sharing.
+- **Privacy-focused:** Your files are sent directly between your devices and never stored in the cloud.
+- **Automatic discovery:** Devices on the same network are automatically discovered.
+- **Reliable transfers:** Powered by WebRTC for reliable and efficient file transfers.
 
+## Screenshots
 
-## Getting Started
+| macOS | Android |
+| :---: | :---: |
+| ![macOS screenshot](assets/screenshots/macos.png) | ![Android screenshot](assets/screenshots/android.png) |
+| *Animated GIF showing file transfer* |
+| ![File transfer GIF](assets/screenshots/transfer.gif) |
 
-You need Flutter installed to build the app. OpenDrop requires **Flutter 3.4** or later. Run the following commands:
+## Installation
 
-```bash
-flutter pub get
-flutter run
-```
+### macOS
 
-The app will display other devices running OpenDrop on the same network. Tap a peer to select a file and send it.
-You can also use the link icon to enter an IP address and connect directly. Once
-connected, devices automatically exchange an emoji and the "Send File"
-menu option becomes enabled for sending data. On Android, ensure the device is
-connected to Wi-Fi so its IP can be detected.
+Download the latest release from the [releases page](https://github.com/USERNAME/REPONAME/releases) and drag the `OpenDrop.app` to your `Applications` folder.
 
-### Android permissions
+### Windows
 
-The release version of the app requires the `INTERNET` permission to open
-network sockets. Ensure the following line is present in
-`android/app/src/main/AndroidManifest.xml`:
+Download the latest release from the [releases page](https://github.com/USERNAME/REPONAME/releases) and run the installer.
 
-```xml
-<uses-permission android:name="android.permission.INTERNET"/>
-```
+### Linux
 
+Download the latest release from the [releases page](https://github.com/USERNAME/REPONAME/releases) and run the AppImage.
 
-### macOS permissions
+### Android
 
-When building for macOS the app runs inside the sandbox. The entitlements files
-have been configured to allow both network client and server access. If you
-modify the project, ensure `com.apple.security.network.client` and
-`com.apple.security.network.server` remain enabled so discovery works correctly.
-To access files chosen via the dialog and save incoming files in `Downloads`
-also enable `com.apple.security.files.user-selected.read-write` and
-`com.apple.security.files.downloads.read-write`.
+Download the latest APK from the [releases page](https://github.com/USERNAME/REPONAME/releases) and install it on your device.
 
-## Logo
+## Badges
 
-Place your application logo at `assets/logo.png` in PNG format. A size of
-256x256 pixels or larger is recommended. The logo is displayed on the home
-screen when the app launches. Update `pubspec.yaml` if you rename the file or
-use additional formats.
+[![Build Status](https://img.shields.io/github/actions/workflow/status/USERNAME/REPONAME/build.yml?branch=main)](https://github.com/USERNAME/REPONAME/actions/workflows/build.yml)
+[![License](https://img.shields.io/github/license/USERNAME/REPONAME)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/USERNAME/REPONAME)](https://github.com/USERNAME/REPONAME/releases)
 
 ## License
 
-OpenDrop is distributed under the terms of the GNU General Public License
-version 3. See the [LICENSE](LICENSE) file for full details.
+OpenDrop is distributed under the terms of the GNU General Public License version 3. See the [LICENSE](LICENSE) file for full details.
