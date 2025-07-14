@@ -1,57 +1,71 @@
 # Contributing to OpenDrop
 
-First off, thank you for considering contributing to OpenDrop! It’s people like you that make the open source community such a great place.
-
-## How Can I Contribute?
-
-### Reporting Bugs
-
-If you find a bug, please open an issue on GitHub and provide the following information:
-
-*   A clear and descriptive title.
-*   A detailed description of the bug, including steps to reproduce it.
-*   The version of the app you are using.
-*   The operating system you are using.
-*   Any relevant logs or screenshots.
-
-### Suggesting Enhancements
-
-If you have an idea for an enhancement, please open an issue on GitHub and provide the following information:
-
-*   A clear and descriptive title.
-*   A detailed description of the enhancement you are proposing.
-*   Any mockups or screenshots that might help explain your idea.
-
-### Pull Requests
-
-If you want to contribute code, please follow these steps:
-
-1.  Fork the repository and create a new branch from `main`.
-2.  Make your changes, making sure to follow the coding style of the project.
-3.  Write tests for your changes.
-4.  Make sure all tests pass.
-5.  Open a pull request with a clear and descriptive title and a detailed description of your changes.
+First off, thank you for considering contributing to OpenDrop! It's people like you that make OpenDrop such a great tool.
 
 ## Development Setup
 
-To get started with development, you will need to have Flutter installed on your system. You can find instructions on how to install Flutter [here](https://flutter.dev/docs/get-started/install).
+1.  **Fork the repository** on GitHub.
+2.  **Clone your fork** locally:
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/opendrop.git
+    cd opendrop
+    ```
+3.  **Install dependencies:**
+    ```bash
+    flutter pub get
+    ```
+4.  **Run the app:**
+    ```bash
+    flutter run
+    ```
 
-Once you have Flutter installed, you can clone the repository and run the app with the following commands:
+## Code Style and Formatting
 
-```bash
-git clone https://github.com/your-username/opendrop.git
-cd opendrop
-flutter run
-```
-
-## Coding Style
-
-This project follows the official [Dart style guide](https://dart.dev/guides/language/effective-dart/style). Please make sure your code adheres to this style guide before submitting a pull request.
-
-We also use the `flutter_lints` package to enforce a consistent coding style. You can run the linter with the following command:
+This project uses the standard Flutter lints. Please run the analyzer to check for issues before submitting a pull request:
 
 ```bash
 flutter analyze
 ```
 
-Thank you for your contributions!
+## Pull Request Process
+
+1.  Ensure any install or build dependencies are removed before the end of the layer when doing a build.
+2.  Update the `README.md` with details of changes to the interface, this includes new environment variables, exposed ports, useful file locations and container parameters.
+3.  Increase the version numbers in any examples files and the `README.md` to the new version that this Pull Request would represent. The versioning scheme we use is [SemVer](http://semver.org/).
+4.  You may merge the Pull Request in once you have the sign-off of two other developers, or if you do not have permission to do that, you may request the second reviewer to merge it for you.
+
+## Issue Reporting
+
+We use GitHub issues to track public bugs. Please ensure your description is clear and has sufficient instructions to be able to reproduce the issue.
+
+### Bug Reports
+
+When reporting a bug, please include:
+
+*   A clear and descriptive title.
+*   A detailed description of the problem.
+*   Steps to reproduce the bug.
+*   The expected behavior and what actually happened.
+*   Your operating system, and the version of OpenDrop you're using.
+
+### Feature Requests
+
+When suggesting a new feature, please include:
+
+*   A clear and descriptive title.
+*   A detailed description of the proposed feature and its benefits.
+*   Any mockups or examples of how the feature would work.
+
+## Testing
+
+Please add tests for any new features or bug fixes. This project uses the standard Flutter testing framework.
+
+Run tests with:
+
+```bash
+flutter test
+```
+
+## Release Process
+
+The release process is handled by the project maintainers.

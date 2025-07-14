@@ -5,7 +5,8 @@
 pubspec.lock
 .flutter-plugins
 .flutter-plugins-dependencies
-
+logs/
+run_and_log.sh
 # Visual Studio Code
 .vscode/
 
