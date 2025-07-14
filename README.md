@@ -48,7 +48,7 @@ Download the latest APK from the [releases page](https://github.com/USERNAME/REP
 ## Badges
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/USERNAME/REPONAME/build.yml?branch=main)](https://github.com/USERNAME/REPONAME/actions/workflows/build.yml)
-[![License](https://img.shields.io/github/license/USERNAME/REPONAME)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Latest Release](https://img.shields.io/github/v/release/USERNAME/REPONAME)](https://github.com/USERNAME/REPONAME/releases)
 
 ## License
