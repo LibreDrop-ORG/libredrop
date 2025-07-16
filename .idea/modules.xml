@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/opendrop.iml" filepath="$PROJECT_DIR$/opendrop.iml" />
-      <module fileurl="file://$PROJECT_DIR$/android/opendrop_android.iml" filepath="$PROJECT_DIR$/android/opendrop_android.iml" />
+      <module fileurl="file://$PROJECT_DIR$/libredrop.iml" filepath="$PROJECT_DIR$/libredrop.iml" />
+      <module fileurl="file://$PROJECT_DIR$/android/libredrop_android.iml" filepath="$PROJECT_DIR$/android/libredrop_android.iml" />
     </modules>
   </component>
 </project>

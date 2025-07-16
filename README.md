@@ -1,10 +1,10 @@
-# OpenDrop: Cross-platform AirDrop alternative with GUI
+# LibreDrop: Cross-platform AirDrop alternative with GUI
 
-OpenDrop is a cross-platform file sharing app built with Flutter. It allows users on the same local network to discover each other and exchange files with a simple and intuitive GUI.
+LibreDrop is a cross-platform file sharing app built with Flutter. It allows users on the same local network to discover each other and exchange files with a simple and intuitive GUI.
 
-## Why OpenDrop?
+## Why LibreDrop?
 
-| Feature | OpenDrop | AirDrop | CLI Tools (e.g., scp, rsync) |
+| Feature | LibreDrop | AirDrop | CLI Tools (e.g., scp, rsync) |
 | :--- | :---: | :---: | :---: |
 | **GUI** | ✅ | ✅ | ❌ |
 | **Cross-platform** | ✅ | ❌ | ✅ |
@@ -31,7 +31,7 @@ OpenDrop is a cross-platform file sharing app built with Flutter. It allows user
 
 ### macOS
 
-Download the latest release from the [releases page](https://github.com/USERNAME/REPONAME/releases) and drag the `OpenDrop.app` to your `Applications` folder.
+Download the latest release from the [releases page](https://github.com/USERNAME/REPONAME/releases) and drag the `LibreDrop.app` to your `Applications` folder.
 
 ### Windows
 
@@ -53,4 +53,4 @@ Download the latest APK from the [releases page](https://github.com/USERNAME/REP
 
 ## License
 
-OpenDrop is distributed under the terms of the GNU General Public License version 3. See the [LICENSE](LICENSE) file for full details.
+LibreDrop is distributed under the terms of the GNU General Public License version 3. See the [LICENSE](LICENSE) file for full details.

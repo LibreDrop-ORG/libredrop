@@ -1,4 +1,4 @@
-// OpenDrop - Local network file sharing app
+// LibreDrop - Local network file sharing app
 // Copyright (C) 2025 Pablo Javier Etcheverry
 //
 // This program is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU GPL
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-library opendrop_debug;
+library libredrop_debug;
 
 import 'package:flutter/foundation.dart';
 import 'dart:io';
@@ -79,7 +79,7 @@ Future<void> initializeFileLogger(String instanceName, {String? logDirectoryPath
         // ignore: avoid_print
         print('[DEBUG] Log directory created.');
       }
-      final logFile = File('${logDir.path}/opendrop_debug_${instanceName}_${DateTime.now().millisecondsSinceEpoch}.log');
+      final logFile = File('${logDir.path}/libredrop_debug_${instanceName}_${DateTime.now().millisecondsSinceEpoch}.log');
       // ignore: avoid_print
       print('[DEBUG] Log file path: ${logFile.path}');
       _fileLogger = FileLogger(logFile);

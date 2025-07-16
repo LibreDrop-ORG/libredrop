@@ -1,4 +1,4 @@
-package com.example.opendrop
+package com.example.libredrop
 
 import io.flutter.embedding.android.FlutterActivity
 

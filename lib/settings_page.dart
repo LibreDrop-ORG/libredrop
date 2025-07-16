@@ -1,4 +1,4 @@
-// OpenDrop - Local network file sharing app
+// LibreDrop - Local network file sharing app
 // Copyright (C) 2025 Pablo Javier Etcheverry
 //
 // This program is free software: you can redistribute it and/or modify
