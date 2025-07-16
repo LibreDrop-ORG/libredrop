@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.3] - 2025-07-16
+
+### Added
+- [Add new features here]
+
+### Changed
+- [Add changes here]
+
+### Fixed
+- [Add bug fixes here]
+
 ## [0.2.2] - 2025-07-16
 
 ### Added
