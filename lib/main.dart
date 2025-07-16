@@ -957,7 +957,7 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           children: [
             ListTile(
-              title: const Text('Discovered Peers'),
+              title: const Text('LibreDrop Peers'),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
