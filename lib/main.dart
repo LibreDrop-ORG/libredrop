@@ -149,19 +149,34 @@ class MyApp extends StatelessWidget {
 class Peer {
   final InternetAddress address;
   final int port;
+  final String name;
+  final String type; // e.g., 'android', 'macos', 'linux', 'windows'
 
-  Peer(this.address, this.port);
+  Peer(this.address, this.port, {required this.name, required this.type});
 }
 
 class DiscoveryService {
   static const int broadcastPort = 4567;
-  static const String message = 'OPENDROP';
+  static const String messagePrefix = 'OPENDROP:';
+  final String deviceName;
+  final String deviceType;
 
-  DiscoveryService({this.onLog, required String localIp, this.knownPeers}) : _localIp = localIp {
+  DiscoveryService({
+    this.onLog,
+    required String localIp,
+    required this.deviceName,
+    required this.deviceType,
+    this.knownPeers,
+  }) : _localIp = localIp {
     debugLog('DiscoveryService initialized with local IP: $_localIp');
     if (knownPeers != null) {
       for (final ip in knownPeers!) {
-        final peer = Peer(InternetAddress(ip), connectionPort);
+        final peer = Peer(
+          InternetAddress(ip),
+          connectionPort,
+          name: 'Unknown', // Default name for manually added peers
+          type: 'Unknown', // Default type for manually added peers
+        );
         if (peer.address.address != _localIp && !peers.any((p) => p.address == peer.address)) {
           peers.add(peer);
           onLog?.call('Manually added known peer ${peer.address.address}');
@@ -198,6 +213,11 @@ class DiscoveryService {
 
   void announce() {
     debugLog('Sending discovery announcement.');
+    final message = jsonEncode({
+      'prefix': messagePrefix,
+      'name': deviceName,
+      'type': deviceType,
+    });
     _socket?.send(
       utf8.encode(message),
       InternetAddress('255.255.255.255'),
@@ -209,17 +229,27 @@ class DiscoveryService {
     if (event == RawSocketEvent.read && _socket != null) {
       final dg = _socket!.receive();
       if (dg == null) return;
-      final msg = utf8.decode(dg.data);
-      if (msg == message) {
-        final peer = Peer(dg.address, dg.port);
-        debugLog('Received discovery message from ${peer.address.address}');
-        if (peer.address.address != _localIp && !peers.any((p) => p.address == peer.address)) {
-          peers.add(peer);
-          onLog?.call('Discovered peer ${peer.address.address}');
-          debugLog('Added peer ${peer.address.address}');
-        } else {
-          debugLog('Filtered out peer ${peer.address.address} (either self or already in list).');
+      final rawMsg = utf8.decode(dg.data);
+      try {
+        final Map<String, dynamic> msg = jsonDecode(rawMsg);
+        if (msg['prefix'] == messagePrefix) {
+          final peer = Peer(
+            dg.address,
+            dg.port,
+            name: msg['name'] ?? 'Unknown',
+            type: msg['type'] ?? 'Unknown',
+          );
+          debugLog('Received discovery message from ${peer.address.address} (Name: ${peer.name}, Type: ${peer.type})');
+          if (peer.address.address != _localIp && !peers.any((p) => p.address == peer.address)) {
+            peers.add(peer);
+            onLog?.call('Discovered peer ${peer.name} (${peer.address.address})');
+            debugLog('Added peer ${peer.address.address}');
+          } else {
+            debugLog('Filtered out peer ${peer.address.address} (either self or already in list).');
+          }
         }
+      } catch (e) {
+        debugLog('Received non-JSON discovery message or malformed: $rawMsg');
       }
     }
   }
