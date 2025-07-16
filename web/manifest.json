@@ -1,6 +1,6 @@
 {
-    "name": "opendrop",
-    "short_name": "opendrop",
+    "name": "libredrop",
+    "short_name": "libredrop",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

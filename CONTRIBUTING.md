@@ -1,14 +1,14 @@
-# Contributing to OpenDrop
+# Contributing to LibreDrop
 
-First off, thank you for considering contributing to OpenDrop! It's people like you that make OpenDrop such a great tool.
+First off, thank you for considering contributing to LibreDrop! It's people like you that make LibreDrop such a great tool.
 
 ## Development Setup
 
 1.  **Fork the repository** on GitHub.
 2.  **Clone your fork** locally:
     ```bash
-    git clone https://github.com/YOUR_USERNAME/opendrop.git
-    cd opendrop
+    git clone https://github.com/YOUR_USERNAME/libredrop.git
+    cd libredrop
     ```
 3.  **Install dependencies:**
     ```bash
@@ -46,7 +46,7 @@ When reporting a bug, please include:
 *   A detailed description of the problem.
 *   Steps to reproduce the bug.
 *   The expected behavior and what actually happened.
-*   Your operating system, and the version of OpenDrop you're using.
+*   Your operating system, and the version of LibreDrop you're using.
 
 ### Feature Requests
 

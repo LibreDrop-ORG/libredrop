@@ -1,6 +1,6 @@
-# OpenDrop To-Do List
+# LibreDrop To-Do List
 
-This file contains a list of tasks that need to be completed for the OpenDrop app.
+This file contains a list of tasks that need to be completed for the LibreDrop app.
 
 ## High Priority
 

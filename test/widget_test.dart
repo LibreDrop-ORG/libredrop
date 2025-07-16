@@ -7,7 +7,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:opendrop/main.dart';
+import 'package:libredrop/main.dart';
 
 void main() {
   testWidgets('Home page shows peer list title', (WidgetTester tester) async {
@@ -15,6 +15,6 @@ void main() {
     await tester.pumpWidget(const MyApp());
 
     // Verify that the title is present.
-    expect(find.text('OpenDrop Peers'), findsOneWidget);
+    expect(find.text('LibreDrop Peers'), findsOneWidget);
   });
 }

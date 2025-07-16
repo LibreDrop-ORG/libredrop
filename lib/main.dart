@@ -1,4 +1,4 @@
-// OpenDrop - Local network file sharing app
+// LibreDrop - Local network file sharing app
 // Copyright (C) 2025 Pablo Javier Etcheverry
 //
 // This program is free software: you can redistribute it and/or modify
@@ -139,7 +139,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'OpenDrop',
+      title: 'LibreDrop',
       theme: ThemeData(primarySwatch: Colors.blue),
       home: const HomePage(),
     );
@@ -149,19 +149,34 @@ class MyApp extends StatelessWidget {
 class Peer {
   final InternetAddress address;
   final int port;
+  final String name;
+  final String type; // e.g., 'android', 'macos', 'linux', 'windows'
 
-  Peer(this.address, this.port);
+  Peer(this.address, this.port, {required this.name, required this.type});
 }
 
 class DiscoveryService {
   static const int broadcastPort = 4567;
-  static const String message = 'OPENDROP';
+  static const String messagePrefix = 'LIBREDROP:';
+  final String deviceName;
+  final String deviceType;
 
-  DiscoveryService({this.onLog, required String localIp, this.knownPeers}) : _localIp = localIp {
+  DiscoveryService({
+    this.onLog,
+    required String localIp,
+    required this.deviceName,
+    required this.deviceType,
+    this.knownPeers,
+  }) : _localIp = localIp {
     debugLog('DiscoveryService initialized with local IP: $_localIp');
     if (knownPeers != null) {
       for (final ip in knownPeers!) {
-        final peer = Peer(InternetAddress(ip), connectionPort);
+        final peer = Peer(
+          InternetAddress(ip),
+          connectionPort,
+          name: 'Unknown', // Default name for manually added peers
+          type: 'Unknown', // Default type for manually added peers
+        );
         if (peer.address.address != _localIp && !peers.any((p) => p.address == peer.address)) {
           peers.add(peer);
           onLog?.call('Manually added known peer ${peer.address.address}');
@@ -198,6 +213,11 @@ class DiscoveryService {
 
   void announce() {
     debugLog('Sending discovery announcement.');
+    final message = jsonEncode({
+      'prefix': messagePrefix,
+      'name': deviceName,
+      'type': deviceType,
+    });
     _socket?.send(
       utf8.encode(message),
       InternetAddress('255.255.255.255'),
@@ -209,17 +229,27 @@ class DiscoveryService {
     if (event == RawSocketEvent.read && _socket != null) {
       final dg = _socket!.receive();
       if (dg == null) return;
-      final msg = utf8.decode(dg.data);
-      if (msg == message) {
-        final peer = Peer(dg.address, dg.port);
-        debugLog('Received discovery message from ${peer.address.address}');
-        if (peer.address.address != _localIp && !peers.any((p) => p.address == peer.address)) {
-          peers.add(peer);
-          onLog?.call('Discovered peer ${peer.address.address}');
-          debugLog('Added peer ${peer.address.address}');
-        } else {
-          debugLog('Filtered out peer ${peer.address.address} (either self or already in list).');
+      final rawMsg = utf8.decode(dg.data);
+      try {
+        final Map<String, dynamic> msg = jsonDecode(rawMsg);
+        if (msg['prefix'] == messagePrefix) {
+          final peer = Peer(
+            dg.address,
+            dg.port,
+            name: msg['name'] ?? 'Unknown',
+            type: msg['type'] ?? 'Unknown',
+          );
+          debugLog('Received discovery message from ${peer.address.address} (Name: ${peer.name}, Type: ${peer.type})');
+          if (peer.address.address != _localIp && !peers.any((p) => p.address == peer.address)) {
+            peers.add(peer);
+            onLog?.call('Discovered peer ${peer.name} (${peer.address.address})');
+            debugLog('Added peer ${peer.address.address}');
+          } else {
+            debugLog('Filtered out peer ${peer.address.address} (either self or already in list).');
+          }
         }
+      } catch (e) {
+        debugLog('Received non-JSON discovery message or malformed: $rawMsg');
       }
     }
   }
@@ -619,7 +649,7 @@ class _FileTransfer {
 }
 
 class _HomePageState extends State<HomePage> {
-  DiscoveryService? _discovery; // Made nullable
+  DiscoveryService? _discovery;
   late final ConnectionService _connection;
   late final SettingsService _settings;
   bool _connected = false;
@@ -633,14 +663,7 @@ class _HomePageState extends State<HomePage> {
   final List<String> _logs = [];
   int? _negotiatedChunkSize;
   int? _negotiatedBufferThreshold;
-
-  void _addLog(String msg) {
-    if (!mounted) return;
-    debugLog(msg);
-    setState(() {
-      _logs.add(msg);
-    });
-  }
+  bool _isRefreshing = false;
 
   @override
   void initState() {
@@ -730,25 +753,43 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _downloadsPath = p;
       });
-      _connection.start(); // Start connection service after path is set
+      _connection.start();
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final ip = await chooseLocalIp(context);
+      if (ip == null) {
+        _addLog('Could not determine local IP. Discovery will not start.');
+        // Optionally, show an error to the user
+        return;
+      }
       setState(() {
         _localIp = ip;
       });
 
+      String deviceName = Platform.localHostname;
+      String deviceType = Platform.operatingSystem;
+
       if (Platform.isAndroid) {
-        // For Android, hardcode the host IP as a known peer
-        _discovery = DiscoveryService(onLog: _addLog, localIp: _localIp!, knownPeers: ['10.0.2.2']);
+        _discovery = DiscoveryService(
+          onLog: _addLog,
+          localIp: _localIp!,
+          deviceName: deviceName,
+          deviceType: deviceType,
+          knownPeers: ['10.0.2.2'],
+        );
         _addLog('Android detected, trying to connect to host');
         await _connection.connect('10.0.2.2');
       } else {
-        // For other platforms, use regular discovery
-        _discovery = DiscoveryService(onLog: _addLog, localIp: _localIp!);
+        _discovery = DiscoveryService(
+          onLog: _addLog,
+          localIp: _localIp!,
+          deviceName: deviceName,
+          deviceType: deviceType,
+        );
       }
-      _discovery!.start(); // Start discovery service after local IP is known
+      _discovery!.start();
+      setState(() {}); // Refresh UI after discovery starts
     });
   }
 
@@ -756,30 +797,67 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _discovery?.dispose();
     _connection.dispose();
-    disposeFileLogger(); // Dispose the file logger
+    disposeFileLogger();
     super.dispose();
   }
 
-  Future<void> _sendFile(Peer peer) async {
-    _addLog('Sending file to ${peer.address.address}');
+  void _addLog(String msg) {
+    if (!mounted) return;
+    debugLog(msg);
+    setState(() {
+      _logs.add(msg);
+    });
+  }
+
+  Future<void> _pickAndSendFile({Peer? peer}) async {
     final result = await FilePicker.platform.pickFiles();
-    if (result == null || result.files.single.path == null) return;
-    final file = File(result.files.single.path!);
-    if (!_connection.isConnected) {
+    if (result != null && result.files.single.path != null) {
+      final file = File(result.files.single.path!);
+      if (peer != null) {
+        _sendFileToPeer(file, peer);
+      } else if (_connection.isConnected) {
+        await _connection.sendFile(file);
+      } else {
+        _addLog('Select a peer to send the file to.');
+      }
+    }
+  }
+
+  Future<void> _sendFileToPeer(File file, Peer peer) async {
+    if (!_connection.isConnected || _connection.remoteIp != peer.address.address) {
       await _connection.connect(peer.address.address);
     }
-    await _connection.sendFile(file);
+    if (_connection.isConnected) {
+      await _connection.sendFile(file);
+    } else {
+      _addLog('Could not connect to ${peer.address.address} to send file.');
+    }
   }
 
   Future<void> _promptAndConnect() async {
     final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
     final ip = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Connect to IP'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'Enter IP address'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            decoration: const InputDecoration(hintText: 'Enter IP address'),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter an IP address';
+              }
+              final ipRegex = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$');
+              if (!ipRegex.hasMatch(value)) {
+                return 'Please enter a valid IPv4 address';
+              }
+              return null;
+            },
+          ),
         ),
         actions: [
           TextButton(
@@ -787,188 +865,246 @@ class _HomePageState extends State<HomePage> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(context).pop(controller.text);
+              }
+            },
             child: const Text('Connect'),
           ),
         ],
       ),
     );
+
     if (ip != null && ip.isNotEmpty) {
-      _addLog('Connecting to $ip');
       await _connection.connect(ip);
     }
   }
 
-  Future<void> _sendFileToConnection() async {
-    final result = await FilePicker.platform.pickFiles();
-    if (result == null || result.files.single.path == null) return;
-    final file = File(result.files.single.path!);
-    await _connection.sendFile(file);
-  }
-
-  Future<void> _openSettings() async {
-    final path = await Navigator.push<String?>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SettingsPage(currentPath: _downloadsPath),
-      ),
-    );
-    if (path != null) {
-      await _settings.saveDownloadPath(path);
-      await _connection.setDownloadPath(path);
-      setState(() => _downloadsPath = path);
-    }
+  Future<void> _refreshPeers() async {
+    setState(() {
+      _isRefreshing = true;
+      _discovery?.peers.clear();
+    });
+    _discovery?.announce();
+    await Future.delayed(const Duration(seconds: 2));
+    setState(() {
+      _isRefreshing = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('OpenDrop Peers'),
+        title: Text(_localIp ?? 'LibreDrop'),
         actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              switch (value) {
-                case 'connect':
-                  _promptAndConnect();
-                  break;
-                case 'send':
-                  if (_connected) _sendFileToConnection();
-                  break;
-                case 'settings':
-                  _openSettings();
-                  break;
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () async {
+              final newPath = await Navigator.of(context).push<String?>(
+                MaterialPageRoute(
+                  builder: (context) => SettingsPage(
+                    currentPath: _downloadsPath,
+                  ),
+                ),
+              );
+              if (newPath != null) {
+                await _settings.saveDownloadPath(newPath);
+                await _connection.setDownloadPath(newPath);
+                setState(() {
+                  _downloadsPath = newPath;
+                });
               }
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'connect',
-                child: Text('Conectar a IP'),
-              ),
-              PopupMenuItem(
-                value: 'send',
-                enabled: _connected,
-                child: const Text('Enviar archivo'),
-              ),
-              const PopupMenuItem(
-                value: 'settings',
-                child: Text('Settings'),
-              ),
-            ],
           ),
         ],
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Image.asset(
-                  'assets/logo.png',
-                  height: 80,
-                ),
-                if (_localIp != null) Text('Your IP: $_localIp'),
-                const SizedBox(height: 4),
-                if (_remoteIp != null && _remoteEmoji != null)
-                  Text('Connected to $_remoteIp $_remoteEmoji'),
-                if (_negotiatedChunkSize != null)
-                  Text('Negotiated Chunk Size: ${_negotiatedChunkSize! / 1024} KB'),
-                if (_negotiatedBufferThreshold != null)
-                  Text('Negotiated Buffer Threshold: ${_negotiatedBufferThreshold! / 1024} KB'),
-                ..._transfers.map(
-                  (t) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: LinearProgressIndicator(
-                                  value: t.progress,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text('${t.percentage}%'),
-                            ],
-                          ),
-                        ),
-                        if (t.progress < 1 && !t.cancelled)
-                          IconButton(
-                            icon: const Icon(Icons.cancel),
-                            onPressed: () {
-                              _connection.cancelTransfer();
-                              setState(() {
-                                t.cancelled = true;
-                                if (t.sending) {
-                                  _activeSendTransfer = null;
-                                } else {
-                                  _activeReceiveTransfer = null;
-                                }
-                              });
-                            },
-                          ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: t.path != null
-                              ? () => OpenFilex.open(t.path!)
-                              : null,
-                          child: Text(
-                            t.name,
-                            style: TextStyle(
-                              color: t.path != null ? Colors.blue : null,
-                              decoration: t.path != null
-                                  ? TextDecoration.underline
-                                  : null,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Text('Peers found: ${_discovery?.peers.length ?? 0}'),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _discovery?.peers.length ?? 0,
-              itemBuilder: (context, index) {
-                final peer = _discovery!.peers[index];
-                return ListTile(
-                  title: Text(peer.address.address),
-                  onTap: () => _sendFile(peer),
-                );
-              },
-            ),
-          ),
-          if (_logs.isNotEmpty)
-            Container(
-              color: Colors.black,
-              padding: const EdgeInsets.all(8),
-              height: 120,
-              child: ListView(
-                children: _logs
-                    .map(
-                      (l) => Text(
-                        l,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
+          _buildConnectionStatus(),
+          _buildPeerList(),
+          _buildTransferList(),
+          _buildLogView(),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _discovery?.announce,
-        child: const Icon(Icons.wifi_tethering),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _pickAndSendFile,
+        label: const Text('Send File'),
+        icon: const Icon(Icons.send),
+      ),
+    );
+  }
+
+  Widget _buildConnectionStatus() {
+    final statusText = _connected
+        ? 'Connected to $_remoteEmoji $_remoteIp'
+        : 'Not Connected';
+    final configText = _negotiatedChunkSize != null
+        ? ' | WebRTC: chunk $_negotiatedChunkSize, buffer $_negotiatedBufferThreshold'
+        : '';
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Text(statusText + configText, style: Theme.of(context).textTheme.titleMedium),
+    );
+  }
+
+  Widget _buildPeerList() {
+    return Expanded(
+      flex: 2,
+      child: Card(
+        margin: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            ListTile(
+              title: const Text('Discovered Peers'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    tooltip: 'Connect to IP',
+                    onPressed: _promptAndConnect,
+                  ),
+                  IconButton(
+                    icon: _isRefreshing
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                    tooltip: 'Refresh Peers',
+                    onPressed: _isRefreshing ? null : _refreshPeers,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _discovery == null || _discovery!.peers.isEmpty
+                  ? const Center(child: Text('Scanning for peers...'))
+                  : ListView.builder(
+                      itemCount: _discovery!.peers.length,
+                      itemBuilder: (context, index) {
+                        final peer = _discovery!.peers[index];
+                        return ListTile(
+                          leading: Icon(
+                            switch (peer.type) {
+                              'android' => Icons.android,
+                              'macos' => Icons.laptop_mac,
+                              'linux' => Icons.computer,
+                              'windows' => Icons.laptop_windows,
+                              _ => Icons.device_unknown,
+                            },
+                          ),
+                          title: Text(peer.name),
+                          subtitle: Text(peer.address.address),
+                          onTap: () => _connection.connect(peer.address.address),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.send_to_mobile),
+                            onPressed: () => _pickAndSendFile(peer: peer),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransferList() {
+    return Expanded(
+      flex: 3,
+      child: Card(
+        margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: Column(
+          children: [
+            const ListTile(title: Text('File Transfers')),
+            Expanded(
+              child: _transfers.isEmpty
+                  ? const Center(child: Text('No transfers yet.'))
+                  : ListView.builder(
+                      itemCount: _transfers.length,
+                      itemBuilder: (context, index) {
+                        final transfer = _transfers.reversed.toList()[index];
+                        final isSending = transfer.sending;
+                        final isActive = transfer == _activeReceiveTransfer ||
+                            transfer == _activeSendTransfer;
+                        final isDone = transfer.transferred == transfer.size && !isActive;
+
+                        return ListTile(
+                          leading: Icon(isSending ? Icons.upload : Icons.download),
+                          title: Text(transfer.name),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${(transfer.transferred / 1024 / 1024).toStringAsFixed(2)} / ${(transfer.size / 1024 / 1024).toStringAsFixed(2)} MB',
+                              ),
+                              if (!isDone)
+                                LinearProgressIndicator(value: transfer.progress),
+                            ],
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isDone && !isSending && transfer.path != null)
+                                IconButton(
+                                  icon: const Icon(Icons.folder_open),
+                                  onPressed: () {
+                                    if (transfer.path != null) {
+                                      OpenFilex.open(transfer.path!); 
+                                    }
+                                  },
+                                ),
+                              if (isActive)
+                                IconButton(
+                                  icon: const Icon(Icons.cancel),
+                                  onPressed: () {
+                                    _connection.cancelTransfer();
+                                    setState(() {
+                                      transfer.cancelled = true;
+                                    });
+                                  },
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogView() {
+    return Expanded(
+      flex: 1,
+      child: Card(
+        margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: Column(
+          children: [
+            const ListTile(title: Text('Logs')),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _logs.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                    child: Text(
+                      _logs.reversed.toList()[index],
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
