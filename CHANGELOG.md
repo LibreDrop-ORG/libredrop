@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2025-07-16
+
+### Fixed
+- Corrected failing widget test that was blocking releases.
+
+
 ### Added
 - Complete CI/CD pipeline with GitHub Actions
 - Automated releases for all platforms
