@@ -9,6 +9,6 @@ logs/
 run_and_log.sh
 # Visual Studio Code
 .vscode/
-
+tmp
 # Mac OS
 .DS_Store
