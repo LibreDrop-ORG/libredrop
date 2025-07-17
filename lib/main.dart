@@ -125,7 +125,8 @@ void main(List<String> args) {
   if (debugModeEnabled) {
     // Only pass projectRootPath if not on Android, due to sandboxing
     if (Platform.isAndroid) {
-      initializeFileLogger(instanceName); // Android will use app support directory
+      initializeFileLogger(
+          instanceName); // Android will use app support directory
     } else {
       initializeFileLogger(instanceName, logDirectoryPath: projectRootPath);
     }
