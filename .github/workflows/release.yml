@@ -49,8 +49,10 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
+        with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
         cache: true
+        channel: beta
         
     - name: Get dependencies
       run: flutter pub get
@@ -122,8 +124,10 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
+        with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
         cache: true
+        channel: beta
         
     - name: Enable Windows Desktop
       run: flutter config --enable-windows-desktop
@@ -215,8 +219,10 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
+        with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
         cache: true
+        channel: beta
         
     - name: Enable macOS Desktop
       run: flutter config --enable-macos-desktop
@@ -279,8 +285,10 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
+        with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
         cache: true
+        channel: beta
         
     - name: Install Linux dependencies
       run: |
