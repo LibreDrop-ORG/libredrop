@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0-beta.1] - 2025-07-17
+
+### Added
+- First functional version tested on Android and macOS
+
+### Changed
+- [Add changes here]
+
+### Fixed
+- [Add bug fixes here]
+
+
+
 ## [0.2.4] - 2025-07-16
 
 ### Added

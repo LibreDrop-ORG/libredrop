@@ -7,6 +7,9 @@ cat << EOL
 
 ## 🎉 What's New
 
+- First functional version tested on Android and macOS
+
+
 ### ✨ Features
 - Cross-platform file sharing with enhanced reliability
 - Improved device discovery and connection stability
