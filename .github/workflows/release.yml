@@ -146,7 +146,7 @@ jobs:
     - name: Create Windows installer
       run: |
         # Install Inno Setup
-        choco install innosetup -y
+        # choco install yq
         
         # Create installer script
         $VERSION = "${{ needs.create-release.outputs.version }}"
