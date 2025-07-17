@@ -72,6 +72,7 @@ Future<String?> chooseLocalIp(BuildContext context) async {
     }
     if (options.isEmpty) return null;
     if (options.length == 1) return options.first.value;
+    if (!context.mounted) return null;
     return showDialog<String>(
       context: context,
       barrierDismissible: false,
@@ -124,10 +125,9 @@ void main(List<String> args) {
   if (debugModeEnabled) {
     // Only pass projectRootPath if not on Android, due to sandboxing
     if (Platform.isAndroid) {
-      initializeFileLogger(
-          instanceName!); // Android will use app support directory
+      initializeFileLogger(instanceName); // Android will use app support directory
     } else {
-      initializeFileLogger(instanceName!, logDirectoryPath: projectRootPath);
+      initializeFileLogger(instanceName, logDirectoryPath: projectRootPath);
     }
   }
 
@@ -768,6 +768,7 @@ class _HomePageState extends State<HomePage> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       final ip = await chooseLocalIp(context);
       if (ip == null) {
         _addLog('Could not determine local IP. Discovery will not start.');
