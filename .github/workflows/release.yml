@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  # Force re-evaluation
   push:
     tags:
       - 'v*.*.*'
