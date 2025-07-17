@@ -16,12 +16,7 @@ CURRENT_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | sed 's/+
 echo "📦 Current version: $CURRENT_VERSION"
 
 # Ask for new version
-read -p "🏷️  Enter new version (e.g., 1.0.1): " NEW_VERSION
-
-if [[ -z "$NEW_VERSION" ]]; then
-    echo "❌ Version cannot be empty"
-    exit 1
-fi
+NEW_VERSION=$1
 
 # Validate version format
 if ! [[ $NEW_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -91,8 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 EOL
 else
     # Add new version to existing changelog
-    sed -i.bak "3i\\
-## [$NEW_VERSION] - $(date +%Y-%m-%d)\\
+    sed -i.bak "/## \[Unreleased\]/a\
+\n## [$NEW_VERSION] - $(date +%Y-%m-%d)\\
 \\
 ### Added\\
 - [Add new features here]\\
