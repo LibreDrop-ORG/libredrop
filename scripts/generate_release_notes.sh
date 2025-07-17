@@ -49,11 +49,7 @@ cat << EOL
 - **macOS**: Download .dmg package
 - **Linux**: Download AppImage for universal compatibility
 
-### Package Managers
-- **Homebrew** (macOS): `brew install libredrop`
-- **Chocolatey** (Windows): `choco install libredrop`
-- **Snap** (Linux): `snap install libredrop`
-- **Flatpak** (Linux): `flatpak install libredrop`
+
 
 ## 🚀 Getting Started
 
