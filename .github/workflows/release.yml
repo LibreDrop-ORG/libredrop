@@ -1,4 +1,5 @@
 name: Release
+# This is a test comment to force re-evaluation
 
 on:
   workflow_dispatch:
