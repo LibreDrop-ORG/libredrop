@@ -124,12 +124,13 @@ void main(List<String> args) {
   if (debugModeEnabled) {
     // Only pass projectRootPath if not on Android, due to sandboxing
     if (Platform.isAndroid) {
-      initializeFileLogger(instanceName!); // Android will use app support directory
+      initializeFileLogger(
+          instanceName!); // Android will use app support directory
     } else {
       initializeFileLogger(instanceName!, logDirectoryPath: projectRootPath);
     }
   }
-  
+
   runApp(const MyApp());
 }
 
@@ -177,7 +178,8 @@ class DiscoveryService {
           name: 'Unknown', // Default name for manually added peers
           type: 'Unknown', // Default type for manually added peers
         );
-        if (peer.address.address != _localIp && !peers.any((p) => p.address == peer.address)) {
+        if (peer.address.address != _localIp &&
+            !peers.any((p) => p.address == peer.address)) {
           peers.add(peer);
           onLog?.call('Manually added known peer ${peer.address.address}');
           debugLog('Manually added known peer ${peer.address.address}');
@@ -239,13 +241,17 @@ class DiscoveryService {
             name: msg['name'] ?? 'Unknown',
             type: msg['type'] ?? 'Unknown',
           );
-          debugLog('Received discovery message from ${peer.address.address} (Name: ${peer.name}, Type: ${peer.type})');
-          if (peer.address.address != _localIp && !peers.any((p) => p.address == peer.address)) {
+          debugLog(
+              'Received discovery message from ${peer.address.address} (Name: ${peer.name}, Type: ${peer.type})');
+          if (peer.address.address != _localIp &&
+              !peers.any((p) => p.address == peer.address)) {
             peers.add(peer);
-            onLog?.call('Discovered peer ${peer.name} (${peer.address.address})');
+            onLog?.call(
+                'Discovered peer ${peer.name} (${peer.address.address})');
             debugLog('Added peer ${peer.address.address}');
           } else {
-            debugLog('Filtered out peer ${peer.address.address} (either self or already in list).');
+            debugLog(
+                'Filtered out peer ${peer.address.address} (either self or already in list).');
           }
         }
       } catch (e) {
@@ -335,7 +341,8 @@ class ConnectionService {
         // These values are passed up to the HomePageState to be displayed
         // and are not stored directly in ConnectionService.
         // The WebRTCService itself will store and use the negotiated values.
-        onLog?.call('Negotiated config: chunkSize=$chunkSize, bufferThreshold=$bufferThreshold');
+        onLog?.call(
+            'Negotiated config: chunkSize=$chunkSize, bufferThreshold=$bufferThreshold');
         // Propagate the config to the HomePageState
         if (onConfigComplete != null) {
           onConfigComplete!(chunkSize, bufferThreshold);
@@ -380,20 +387,24 @@ class ConnectionService {
     await setDownloadPath(downloadsPath);
     final localIp = await getLocalIp();
     if (localIp == null) {
-      onLog?.call('Could not determine local IP address. Server will not start.');
+      onLog?.call(
+          'Could not determine local IP address. Server will not start.');
       debugLog('Could not determine local IP address. Server will not start.');
       return;
     }
-    debugLog('Attempting to bind ServerSocket to ${InternetAddress.anyIPv4.address}:$connectionPort');
+    debugLog(
+        'Attempting to bind ServerSocket to ${InternetAddress.anyIPv4.address}:$connectionPort');
     _server = await ServerSocket.bind(InternetAddress.anyIPv4, connectionPort);
     onLog?.call('Listening on ${_server!.address.address}:$connectionPort');
-    debugLog('ServerSocket bound and listening on ${_server!.address.address}:${_server!.port}');
+    debugLog(
+        'ServerSocket bound and listening on ${_server!.address.address}:${_server!.port}');
     _server!.listen(_handleClient);
     debugLog('ServerSocket listening for clients.');
   }
 
   void _handleClient(Socket client) async {
-    debugLog('Received client connection from ${client.remoteAddress.address}:${client.remotePort}');
+    debugLog(
+        'Received client connection from ${client.remoteAddress.address}:${client.remotePort}');
     onLog?.call('Client connected from ${client.remoteAddress.address}');
     _socket = client;
     remoteIp = client.remoteAddress.address;
@@ -415,7 +426,7 @@ class ConnectionService {
       },
     );
   }
-  
+
   Future<void> connect(String ip, {int retries = 3}) async {
     if (isConnected) {
       debugLog('Already connected to $remoteIp, skipping connection to $ip');
@@ -824,7 +835,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _sendFileToPeer(File file, Peer peer) async {
-    if (!_connection.isConnected || _connection.remoteIp != peer.address.address) {
+    if (!_connection.isConnected ||
+        _connection.remoteIp != peer.address.address) {
       await _connection.connect(peer.address.address);
     }
     if (_connection.isConnected) {
@@ -851,7 +863,8 @@ class _HomePageState extends State<HomePage> {
               if (value == null || value.isEmpty) {
                 return 'Please enter an IP address';
               }
-              final ipRegex = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$');
+              final ipRegex =
+                  RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$');
               if (!ipRegex.hasMatch(value)) {
                 return 'Please enter a valid IPv4 address';
               }
@@ -937,15 +950,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildConnectionStatus() {
-    final statusText = _connected
-        ? 'Connected to $_remoteEmoji $_remoteIp'
-        : 'Not Connected';
+    final statusText =
+        _connected ? 'Connected to $_remoteEmoji $_remoteIp' : 'Not Connected';
     final configText = _negotiatedChunkSize != null
         ? ' | WebRTC: chunk $_negotiatedChunkSize, buffer $_negotiatedBufferThreshold'
         : '';
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Text(statusText + configText, style: Theme.of(context).textTheme.titleMedium),
+      child: Text(statusText + configText,
+          style: Theme.of(context).textTheme.titleMedium),
     );
   }
 
@@ -999,7 +1012,8 @@ class _HomePageState extends State<HomePage> {
                           ),
                           title: Text(peer.name),
                           subtitle: Text(peer.address.address),
-                          onTap: () => _connection.connect(peer.address.address),
+                          onTap: () =>
+                              _connection.connect(peer.address.address),
                           trailing: IconButton(
                             icon: const Icon(Icons.send_to_mobile),
                             onPressed: () => _pickAndSendFile(peer: peer),
@@ -1032,10 +1046,12 @@ class _HomePageState extends State<HomePage> {
                         final isSending = transfer.sending;
                         final isActive = transfer == _activeReceiveTransfer ||
                             transfer == _activeSendTransfer;
-                        final isDone = transfer.transferred == transfer.size && !isActive;
+                        final isDone =
+                            transfer.transferred == transfer.size && !isActive;
 
                         return ListTile(
-                          leading: Icon(isSending ? Icons.upload : Icons.download),
+                          leading:
+                              Icon(isSending ? Icons.upload : Icons.download),
                           title: Text(transfer.name),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1044,7 +1060,8 @@ class _HomePageState extends State<HomePage> {
                                 '${(transfer.transferred / 1024 / 1024).toStringAsFixed(2)} / ${(transfer.size / 1024 / 1024).toStringAsFixed(2)} MB',
                               ),
                               if (!isDone)
-                                LinearProgressIndicator(value: transfer.progress),
+                                LinearProgressIndicator(
+                                    value: transfer.progress),
                             ],
                           ),
                           trailing: Row(
@@ -1055,7 +1072,7 @@ class _HomePageState extends State<HomePage> {
                                   icon: const Icon(Icons.folder_open),
                                   onPressed: () {
                                     if (transfer.path != null) {
-                                      OpenFilex.open(transfer.path!); 
+                                      OpenFilex.open(transfer.path!);
                                     }
                                   },
                                 ),
@@ -1094,7 +1111,8 @@ class _HomePageState extends State<HomePage> {
                 itemCount: _logs.length,
                 itemBuilder: (context, index) {
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 4.0),
                     child: Text(
                       _logs.reversed.toList()[index],
                       style: Theme.of(context).textTheme.bodySmall,

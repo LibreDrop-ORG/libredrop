@@ -288,9 +288,11 @@ class WebRTCService {
           break;
         }
 
-        debugLog('Before _waitForBuffer. Buffered amount: ${_channel!.bufferedAmount}');
+        debugLog(
+            'Before _waitForBuffer. Buffered amount: ${_channel!.bufferedAmount}');
         await _waitForBuffer();
-        debugLog('After _waitForBuffer. Buffered amount: ${_channel!.bufferedAmount}');
+        debugLog(
+            'After _waitForBuffer. Buffered amount: ${_channel!.bufferedAmount}');
 
         if (!_channelOpen) {
           debugLog('Data channel closed after _waitForBuffer.');
@@ -308,10 +310,12 @@ class WebRTCService {
           break;
         }
 
-        _channel!.send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(bytes)));
+        _channel!
+            .send(RTCDataChannelMessage.fromBinary(Uint8List.fromList(bytes)));
         _bytesSent += bytes.length;
         onSendProgress?.call(_bytesSent, _totalToSend);
-        debugLog('Sent ${bytes.length} bytes. Total sent: $_bytesSent / $_totalToSend');
+        debugLog(
+            'Sent ${bytes.length} bytes. Total sent: $_bytesSent / $_totalToSend');
       }
     } finally {
       await raf.close();
@@ -343,7 +347,8 @@ class WebRTCService {
   }
 
   Future<void> _waitForBuffer() async {
-    if (_channel == null || _channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
+    if (_channel == null ||
+        _channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
       return;
     }
     // Use a sensible default threshold if not set. 256KB is the default for the channel.
@@ -355,17 +360,21 @@ class WebRTCService {
       return;
     }
 
-    debugLog('Waiting for buffer to be low. Current: ${_channel!.bufferedAmount}, Threshold: $threshold');
+    debugLog(
+        'Waiting for buffer to be low. Current: ${_channel!.bufferedAmount}, Threshold: $threshold');
 
     final completer = Completer<void>();
     Timer? timer;
 
     void check() {
       // If channel is closed or completer is done, stop everything.
-      if (completer.isCompleted || _channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
+      if (completer.isCompleted ||
+          _channel!.state != RTCDataChannelState.RTCDataChannelOpen) {
         if (!completer.isCompleted) {
-          debugLog('Channel closed while waiting for buffer. Completing with error.');
-          completer.completeError(StateError('Channel closed while waiting for buffer'));
+          debugLog(
+              'Channel closed while waiting for buffer. Completing with error.');
+          completer.completeError(
+              StateError('Channel closed while waiting for buffer'));
         }
         return;
       }
@@ -377,7 +386,6 @@ class WebRTCService {
 
     // Assign the callback
     _channel!.onBufferedAmountLow = (_) => check();
-
 
     // Start a fallback timer that also checks the state.
     timer = Timer.periodic(const Duration(milliseconds: 100), (_) => check());

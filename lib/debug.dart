@@ -52,10 +52,12 @@ void debugLog(String message) {
 }
 
 // Function to initialize the file logger
-Future<void> initializeFileLogger(String instanceName, {String? logDirectoryPath}) async {
+Future<void> initializeFileLogger(String instanceName,
+    {String? logDirectoryPath}) async {
   if (kDebugMode) {
     // ignore: avoid_print
-    print('[DEBUG] Attempting to initialize file logger for instance: $instanceName');
+    print(
+        '[DEBUG] Attempting to initialize file logger for instance: $instanceName');
     // ignore: avoid_print
     print('[DEBUG] Provided logDirectoryPath: $logDirectoryPath');
     try {
@@ -63,11 +65,13 @@ Future<void> initializeFileLogger(String instanceName, {String? logDirectoryPath
       if (logDirectoryPath != null && logDirectoryPath.isNotEmpty) {
         baseDir = Directory(logDirectoryPath);
         // ignore: avoid_print
-        print('[DEBUG] Using provided logDirectoryPath as baseDir: ${baseDir.path}');
+        print(
+            '[DEBUG] Using provided logDirectoryPath as baseDir: ${baseDir.path}');
       } else {
         baseDir = await getApplicationSupportDirectory();
         // ignore: avoid_print
-        print('[DEBUG] Using getApplicationSupportDirectory as baseDir: ${baseDir.path}');
+        print(
+            '[DEBUG] Using getApplicationSupportDirectory as baseDir: ${baseDir.path}');
       }
       final logDir = Directory('${baseDir.path}/logs');
       // ignore: avoid_print
@@ -79,7 +83,8 @@ Future<void> initializeFileLogger(String instanceName, {String? logDirectoryPath
         // ignore: avoid_print
         print('[DEBUG] Log directory created.');
       }
-      final logFile = File('${logDir.path}/libredrop_debug_${instanceName}_${DateTime.now().millisecondsSinceEpoch}.log');
+      final logFile = File(
+          '${logDir.path}/libredrop_debug_${instanceName}_${DateTime.now().millisecondsSinceEpoch}.log');
       // ignore: avoid_print
       print('[DEBUG] Log file path: ${logFile.path}');
       _fileLogger = FileLogger(logFile);
