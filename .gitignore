@@ -12,3 +12,4 @@ run_and_log.sh
 tmp
 # Mac OS
 .DS_Store
+*.bak
