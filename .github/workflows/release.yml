@@ -12,7 +12,7 @@ on:
         default: '1.0.0'
 
 env:
-  FLUTTER_VERSION: '3.22.0'
+  FLUTTER_VERSION: 'beta'
 
 jobs:
   create-release:
@@ -73,12 +73,9 @@ jobs:
     - name: Setup Dart SDK
       uses: dart-lang/setup-dart@v1
       with:
-        sdk: '3.4.0'
+        sdk: '3.5.0'
         
-    - name: Setup Dart SDK
-      uses: dart-lang/setup-dart@v1
-      with:
-        sdk: '3.4.0'
+    
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -151,7 +148,7 @@ jobs:
     - name: Setup Dart SDK
       uses: dart-lang/setup-dart@v1
       with:
-        sdk: '3.4.0'
+        sdk: '3.5.0'
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -244,7 +241,7 @@ jobs:
     - name: Setup Dart SDK
       uses: dart-lang/setup-dart@v1
       with:
-        sdk: '3.4.0'
+        sdk: '3.5.0'
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -308,7 +305,7 @@ jobs:
     - name: Setup Dart SDK
       uses: dart-lang/setup-dart@v1
       with:
-        sdk: '3.4.0'
+        sdk: '3.5.0'
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
