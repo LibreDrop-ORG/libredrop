@@ -19,7 +19,6 @@ jobs:
     outputs:
       release_id: ${{ steps.create_release.outputs.id }}
       upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ github.event.inputs.version }} # Use input version directly
     
     steps:
     - name: Checkout code
@@ -143,7 +142,7 @@ jobs:
       
     - name: Update version
       run: |
-        VERSION=${{ needs.prepare-and-build.outputs.version }}
+        VERSION=${{ github.event.inputs.version }}
         (Get-Content pubspec.yaml) -replace '^version: .*', "version: $VERSION+${{ github.run_number }}" | Set-Content pubspec.yaml
         
     - name: Build Windows
@@ -236,7 +235,7 @@ jobs:
       
     - name: Update version
       run: |
-        VERSION=${{ needs.prepare-and-build.outputs.version }}
+        VERSION=${{ github.event.inputs.version }}
         sed -i '' "s/^version: .*/version: $VERSION+${{ github.run_number }}/" pubspec.yaml
         
     - name: Build macOS
@@ -305,7 +304,7 @@ jobs:
       
     - name: Update version
       run: |
-        VERSION=${{ needs.prepare-and-build.outputs.version }}
+        VERSION=${{ github.event.inputs.version }}
         sed -i "s/^version: .*/version: $VERSION+${{ github.run_number }}/" pubspec.yaml
         
     - name: Build Linux
@@ -370,7 +369,7 @@ jobs:
     steps:
     - name: Trigger website update
       run: |
-        echo "🌐 New release v${{ needs.prepare-and-build.outputs.version }} is available!"
+        echo "🌐 New release v${{ github.event.inputs.version }} is available!"
         echo "The website will automatically detect and display the new version."
         
         # Optional: Trigger website repository dispatch event
@@ -378,4 +377,4 @@ jobs:
         #   -H "Authorization: token ${{ secrets.WEBSITE_TOKEN }}" \
         #   -H "Accept: application/vnd.github.v3+json" \
         #   https://api.github.com/repos/username/libredrop-website/dispatches \
-        #   -d '{"event_type":"new_release","client_payload":{"version":"${{ needs.prepare-and-build.outputs.version }}"}}'
+        #   -d '{"event_type":"new_release","client_payload":{"version":"${{ github.event.inputs.version }}"}}'
