@@ -19,6 +19,8 @@ jobs:
     outputs:
       release_id: ${{ steps.create_release.outputs.id }}
       upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version_from_pubspec.outputs.version }}
+      version: ${{ steps.get_version_from_pubspec.outputs.version }}
     
     steps:
     - name: Checkout code
