@@ -27,7 +27,7 @@ fi
 echo "🔍 Preparing release v$NEW_VERSION..."
 
 # Update pubspec.yaml
-sed -i.bak "s/^version: .*/version: $NEW_VERSION+1/" pubspec.yaml
+sed -i.bak "s/^version: .*/version: $NEW_VERSION/" pubspec.yaml
 echo "✅ Updated pubspec.yaml"
 
 # Update version in dart files if they exist
@@ -35,24 +35,6 @@ if [[ -f "lib/constants/app_info.dart" ]]; then
     sed -i.bak "s/static const String version = .*/static const String version = '$NEW_VERSION';/" lib/constants/app_info.dart
     echo "✅ Updated app_info.dart"
 fi
-
-# Run tests
-echo "🧪 Running tests..."
-flutter test
-if [[ $? -ne 0 ]]; then
-    echo "❌ Tests failed. Please fix before releasing."
-    exit 1
-fi
-
-# Build for verification
-echo "🔨 Building for verification..."
-flutter build apk --release
-if [[ $? -ne 0 ]]; then
-    echo "❌ Build failed. Please fix before releasing."
-    exit 1
-fi
-
-echo "✅ Build successful"
 
 # Create changelog entry
 echo "📝 Updating CHANGELOG.md..."
@@ -88,52 +70,21 @@ else
     # Add new version to existing changelog
     sed -i.bak "/## \[Unreleased\]/a\
 \n## [$NEW_VERSION] - $(date +%Y-%m-%d)\\
-\\
-### Added\\
-- [Add new features here]\\
-\\
-### Changed\\
-- [Add changes here]\\
-\\
-### Fixed\\
-- [Add bug fixes here]\\
-\\
-" CHANGELOG.md
+\\n### Added\\\n- [Add new features here]\\\n\\n### Changed\\\n- [Add changes here]\\\n\\n### Fixed\\\n- [Add bug fixes here]\\\n\\n" CHANGELOG.md
 fi
 
 echo "✅ Updated CHANGELOG.md"
 
-# Commit changes
-echo "📝 Committing changes..."
-git add pubspec.yaml CHANGELOG.md
-if [[ -f "lib/constants/app_info.dart" ]]; then
-    git add lib/constants/app_info.dart
-fi
-
-git commit -m "Prepare release v$NEW_VERSION
-
-- Update version to $NEW_VERSION
-- Update changelog
-- Ready for release"
-
-echo "✅ Changes committed"
-
-# Create and push tag
-echo "🏷️  Creating and pushing tag..."
-git tag "v$NEW_VERSION"
-git push origin main
-git push origin "v$NEW_VERSION"
+# The following steps (tests, build, commit, tag, push) will be handled by GitHub Actions workflow.
+# This script only prepares the local files.
 
 echo ""
-echo "🎉 Release v$NEW_VERSION prepared successfully!"
+echo "🎉 Release v$NEW_VERSION prepared successfully locally!"
 echo "================================="
 echo ""
 echo "📋 Next steps:"
-echo "1. ✅ Version updated and committed"
-echo "2. ✅ Tag created and pushed"
-echo "3. 🔄 GitHub Actions will now build and release automatically"
-echo "4. 📱 Binaries will be available at: https://github.com/pablojavier/libredrop/releases"
-echo "5. 🌐 Website will automatically detect the new version"
+echo "1. ✅ Version updated in pubspec.yaml and app_info.dart"
+echo "2. ✅ Changelog updated"
+echo "3. 🔄 Commit these changes and push to GitHub to trigger the Release workflow."
+echo "   (The Release workflow will handle testing, building, tagging, and creating the GitHub Release)"
 echo ""
-echo "🕐 Estimated build time: 15-20 minutes"
-echo "📝 Edit CHANGELOG.md to add specific changes before next release"
