@@ -57,6 +57,34 @@ jobs:
         VERSION=$(yq eval '.version' pubspec.yaml)
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+    - name: Extract Release Notes from CHANGELOG
+      run: |
+        VERSION=${{ steps.get_version_from_pubspec.outputs.version }}
+        # This awk script finds the section for the current version in CHANGELOG.md
+        # and prints it to release_notes.md.
+        awk -v ver="[${VERSION}]" '
+          BEGIN { p=0 }
+          /^## / {
+            if ($2 == ver) {
+              p=1
+            } else if (p) {
+              exit
+            }
+          }
+          p
+        ' CHANGELOG.md > release_notes.md
+
+        # Fail if the release notes are empty
+        if [ ! -s release_notes.md ]; then
+          echo "::error::Release notes for version $VERSION not found in CHANGELOG.md."
+          echo "CHANGELOG.md content:"
+          cat CHANGELOG.md
+          exit 1
+        fi
+
+        echo "Created release_notes.md with the following content:"
+        cat release_notes.md
+
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
