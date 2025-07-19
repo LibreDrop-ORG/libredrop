@@ -173,7 +173,7 @@ jobs:
       
     - name: Update version
       run: |
-        VERSION=${{ github.event.inputs.version }}
+        $VERSION = "${{ github.event.inputs.version }}"
         (Get-Content pubspec.yaml) -replace '^version: .*', "version: $VERSION+${{ github.run_number }}" | Set-Content pubspec.yaml
         
     - name: Build Windows
