@@ -68,9 +68,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 EOL
 else
     # Add new version to existing changelog
-    sed -i.bak "/## \[Unreleased\]/a\
-\n## [$NEW_VERSION] - $(date +%Y-%m-%d)\\
-\\n### Added\\\n- [Add new features here]\\\n\\n### Changed\\\n- [Add changes here]\\\n\\n### Fixed\\\n- [Add bug fixes here]\\\n\\n" CHANGELOG.md
+    awk -v new_version="$NEW_VERSION" -v date="$(date +%Y-%m-%d)" '
+    BEGIN { found=0 }
+    /## \[Unreleased\]/ {
+        print "## [" new_version "] - " date
+        print ""
+        print "### Added"
+        print "- [Add new features here]"
+        print ""
+        print "### Changed"
+        print "- [Add changes here]"
+        print ""
+        print "### Fixed"
+        print "- [Add bug fixes here]"
+        print ""
+        print $0
+        found=1
+        next
+    }
+    { print }
+    END {
+        if (found==0) {
+            print "## [" new_version "] - " date
+            print ""
+            print "### Added"
+            print "- [Add new features here]"
+            print ""
+            print "### Changed"
+            print "- [Add changes here]"
+            print ""
+            print "### Fixed"
+            print "- [Add bug fixes here]"
+        }
+    }' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
 fi
 
 echo "✅ Updated CHANGELOG.md"
