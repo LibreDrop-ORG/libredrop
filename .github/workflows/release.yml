@@ -380,6 +380,8 @@ jobs:
         APPRUN
         chmod +x AppDir/AppRun
         
+        cp assets/logo.png AppDir/usr/share/icons/hicolor/256x256/apps/libredrop.png
+
         # Create AppImage
         mkdir -p dist
         ./appimagetool-x86_64.AppImage AppDir "dist/libredrop-v$VERSION-linux.AppImage"
