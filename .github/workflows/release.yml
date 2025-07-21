@@ -349,7 +349,7 @@ jobs:
         VERSION=${{ needs.prepare-and-build.outputs.version }}
         
         # Download AppImage tools
-        wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+        wget https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
         chmod +x appimagetool-x86_64.AppImage
         
         # Create AppDir structure
