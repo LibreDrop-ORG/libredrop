@@ -354,14 +354,12 @@ jobs:
         
         # Create AppDir structure
         mkdir -p AppDir/usr/bin
-        mkdir -p AppDir/usr/share/applications
-        mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
         
-        # Copy application
+        # Copy application files
         cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
         
-        # Create desktop file
-        cat > AppDir/usr/share/applications/libredrop.desktop << EOF
+        # Create desktop file in AppDir root
+        cat > AppDir/libredrop.desktop << EOF
         [Desktop Entry]
         Type=Application
         Name=LibreDrop
@@ -380,7 +378,8 @@ jobs:
         APPRUN
         chmod +x AppDir/AppRun
         
-        cp assets/logo.png AppDir/usr/share/icons/hicolor/256x256/apps/libredrop.png
+        # Copy icon to AppDir root
+        cp assets/logo.png AppDir/libredrop.png
 
         # Create AppImage
         mkdir -p dist
