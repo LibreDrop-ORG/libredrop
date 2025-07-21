@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. 1.0.0)'
+        description: 'Release version (e.0.0)'
         required: true
         default: '1.0.0'
 
@@ -145,13 +145,12 @@ jobs:
         asset_name: libredrop-v${{ steps.get_version_from_pubspec.outputs.version }}-android-x64.apk
         asset_content_type: application/vnd.android.package-archive
 
-  """  build-windows:
+  build-windows:
     name: Build Windows
     needs: prepare-and-build
     runs-on: windows-latest
     permissions:
-      contents: write""
-    
+      contents: write
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -240,13 +239,12 @@ jobs:
         asset_name: libredrop-v${{ needs.prepare-and-build.outputs.version }}-windows-setup.exe
         asset_content_type: application/octet-stream
 
-  """  build-macos:
+  build-macos:
     name: Build macOS
     needs: prepare-and-build
     runs-on: macos-latest
     permissions:
-      contents: write""
-    
+      contents: write
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -306,13 +304,12 @@ jobs:
         asset_name: libredrop-v${{ needs.prepare-and-build.outputs.version }}-macos.dmg
         asset_content_type: application/octet-stream
 
-  """  build-linux:
+  build-linux:
     name: Build Linux
     needs: prepare-and-build
     runs-on: ubuntu-latest
     permissions:
-      contents: write""
-    
+      contents: write
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -331,7 +328,7 @@ jobs:
     - name: Install Linux dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libfuse2 libfuse2
+        sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libfuse2
         
     - name: Enable Linux Desktop
       run: flutter config --enable-linux-desktop
