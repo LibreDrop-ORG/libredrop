@@ -24,6 +24,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'webrtc_service.dart';
 import 'settings_page.dart';
 import 'settings_service.dart';
@@ -676,6 +677,9 @@ class _HomePageState extends State<HomePage> {
   int? _negotiatedChunkSize;
   int? _negotiatedBufferThreshold;
   bool _isRefreshing = false;
+  List<SharedMediaFile>? _sharedFiles;
+
+  StreamSubscription? _intentDataStreamSubscription;
 
   @override
   void initState() {
@@ -768,6 +772,27 @@ class _HomePageState extends State<HomePage> {
       _connection.start();
     });
 
+    // Listen to media sharing coming from other apps
+    _intentDataStreamSubscription =
+        ReceiveSharingIntent.get
+            MediaStream()
+            .listen((List<SharedMediaFile> value) {
+      setState(() {
+        _sharedFiles = value;
+      });
+      _handleSharedFiles();
+    }, onError: (err) {
+      _addLog("getMediaStream error: $err");
+    });
+
+    // Get the initial media
+    ReceiveSharingIntent.getInitialMedia().then((List<SharedMediaFile> value) {
+      setState(() {
+        _sharedFiles = value;
+      });
+      _handleSharedFiles();
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final ip = await chooseLocalIp(context);
@@ -806,10 +831,72 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  void _handleSharedFiles() {
+    if (_sharedFiles != null && _sharedFiles!.isNotEmpty) {
+      _addLog('Received shared file(s): ${_sharedFiles!.map((f) => f.path).join(', ')}');
+      // Show peer list and let user choose
+      _showPeerSelectionDialog(File(_sharedFiles!.first.path));
+      _sharedFiles = null; // Clear after handling
+    }
+  }
+
+  Future<void> _showPeerSelectionDialog(File file) async {
+    if (_discovery == null || _discovery!.peers.isEmpty) {
+      _addLog('No peers discovered to share the file with.');
+      return;
+    }
+
+    final selectedPeer = await showDialog<Peer>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Select a peer to send the file'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _discovery!.peers.length,
+              itemBuilder: (context, index) {
+                final peer = _discovery!.peers[index];
+                return ListTile(
+                  leading: Icon(
+                    switch (peer.type) {
+                      'android' => Icons.android,
+                      'macos' => Icons.laptop_mac,
+                      'linux' => Icons.computer,
+                      'windows' => Icons.laptop_windows,
+                      _ => Icons.device_unknown,
+                    },
+                  ),
+                  title: Text(peer.name),
+                  subtitle: Text(peer.address.address),
+                  onTap: () => Navigator.of(context).pop(peer),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (selectedPeer != null) {
+      _sendFileToPeer(file, selectedPeer);
+    } else {
+      _addLog('File sharing cancelled by user.');
+    }
+  }
+
   @override
   void dispose() {
     _discovery?.dispose();
     _connection.dispose();
+    _intentDataStreamSubscription?.cancel();
     disposeFileLogger();
     super.dispose();
   }
@@ -822,10 +909,18 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  Future<void> _pickAndSendFile({Peer? peer}) async {
-    final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.single.path != null) {
-      final file = File(result.files.single.path!);
+  Future<void> _pickAndSendFile({Peer? peer, File? fileToSend}) async {
+    File? file;
+    if (fileToSend != null) {
+      file = fileToSend;
+    } else {
+      final result = await FilePicker.platform.pickFiles();
+      if (result != null && result.files.single.path != null) {
+        file = File(result.files.single.path!);
+      }
+    }
+
+    if (file != null) {
       if (peer != null) {
         _sendFileToPeer(file, peer);
       } else if (_connection.isConnected) {
