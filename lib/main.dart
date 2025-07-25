@@ -24,7 +24,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+
 import 'webrtc_service.dart';
 import 'settings_page.dart';
 import 'settings_service.dart';
@@ -677,9 +677,9 @@ class _HomePageState extends State<HomePage> {
   int? _negotiatedChunkSize;
   int? _negotiatedBufferThreshold;
   bool _isRefreshing = false;
-  List<SharedMediaFile>? _sharedFiles;
+  
 
-  StreamSubscription? _intentDataStreamSubscription;
+  
 
   @override
   void initState() {
@@ -772,26 +772,7 @@ class _HomePageState extends State<HomePage> {
       _connection.start();
     });
 
-    // Listen to media sharing coming from other apps
-    _intentDataStreamSubscription =
-        ReceiveSharingIntent.get
-            MediaStream()
-            .listen((List<SharedMediaFile> value) {
-      setState(() {
-        _sharedFiles = value;
-      });
-      _handleSharedFiles();
-    }, onError: (err) {
-      _addLog("getMediaStream error: $err");
-    });
-
-    // Get the initial media
-    ReceiveSharingIntent.getInitialMedia().then((List<SharedMediaFile> value) {
-      setState(() {
-        _sharedFiles = value;
-      });
-      _handleSharedFiles();
-    });
+    
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -831,14 +812,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void _handleSharedFiles() {
-    if (_sharedFiles != null && _sharedFiles!.isNotEmpty) {
-      _addLog('Received shared file(s): ${_sharedFiles!.map((f) => f.path).join(', ')}');
-      // Show peer list and let user choose
-      _showPeerSelectionDialog(File(_sharedFiles!.first.path));
-      _sharedFiles = null; // Clear after handling
-    }
-  }
+  
 
   Future<void> _showPeerSelectionDialog(File file) async {
     if (_discovery == null || _discovery!.peers.isEmpty) {
@@ -896,7 +870,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _discovery?.dispose();
     _connection.dispose();
-    _intentDataStreamSubscription?.cancel();
+    
     disposeFileLogger();
     super.dispose();
   }
