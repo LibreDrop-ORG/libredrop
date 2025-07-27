@@ -395,6 +395,20 @@ jobs:
         asset_name: libredrop-v${{ needs.prepare-and-build.outputs.version }}-linux.AppImage
         asset_content_type: application/octet-stream
 
+  # iOS Build Job Removed
+  # =====================
+  # iOS distribution is not included in automated releases because:
+  # 1. Apple requires a paid Developer Program membership ($99/year) for App Store distribution
+  # 2. Unsigned iOS builds cannot be installed on standard iPhones
+  # 3. TestFlight and Enterprise distribution also require paid accounts
+  # 
+  # LibreDrop fully supports iOS and can be built locally with:
+  #   flutter build ios --release
+  # 
+  # We plan to publish LibreDrop on the iOS App Store once we secure funding
+  # for the Apple Developer Program. Until then, iOS users can build from source
+  # if they have a paid developer account and Xcode.
+
   update-website:
     name: Update Website
     needs: [prepare-and-build, build-windows, build-macos, build-linux]
