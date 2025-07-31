@@ -8,6 +8,11 @@ on:
         description: 'Release version (e.0.0)'
         required: true
         default: '1.0.0'
+      submit_for_review:
+        description: 'Submit iOS build for App Store review'
+        required: false
+        default: 'false'
+        type: boolean
 
 env:
   FLUTTER_VERSION: 'beta'
@@ -395,23 +400,179 @@ jobs:
         asset_name: libredrop-v${{ needs.prepare-and-build.outputs.version }}-linux.AppImage
         asset_content_type: application/octet-stream
 
-  # iOS Build Job Removed
-  # =====================
-  # iOS distribution is not included in automated releases because:
-  # 1. Apple requires a paid Developer Program membership ($99/year) for App Store distribution
-  # 2. Unsigned iOS builds cannot be installed on standard iPhones
-  # 3. TestFlight and Enterprise distribution also require paid accounts
-  # 
-  # LibreDrop fully supports iOS and can be built locally with:
-  #   flutter build ios --release
-  # 
-  # We plan to publish LibreDrop on the iOS App Store once we secure funding
-  # for the Apple Developer Program. Until then, iOS users can build from source
-  # if they have a paid developer account and Xcode.
+  build-ios:
+    name: Build and Deploy iOS
+    needs: prepare-and-build
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Dart SDK
+      uses: dart-lang/setup-dart@v1
+      with:
+        sdk: '3.5.0'
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        cache: true
+        channel: beta
+        
+    - name: Get dependencies
+      run: flutter pub get
+      
+    - name: Update version
+      run: |
+        VERSION=${{ github.event.inputs.version }}
+        sed -i '' "s/^version: .*/version: $VERSION+${{ github.run_number }}/" pubspec.yaml
+        
+    # Setup code signing for App Store distribution
+    - name: Setup iOS Code Signing
+      env:
+        IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+        IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+        IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      run: |
+        # Create variables
+        CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+        PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+        # Import certificate and provisioning profile from secrets
+        echo -n "$IOS_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+        echo -n "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+        # Create temporary keychain
+        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+        # Import certificate to keychain
+        security import $CERTIFICATE_PATH -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+        security list-keychain -d user -s $KEYCHAIN_PATH
+
+        # Apply provisioning profile
+        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+        cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+        
+    - name: Build iOS for App Store
+      run: |
+        # Build signed iOS app for App Store distribution
+        flutter build ios --release
+        
+    - name: Build and Archive iOS App
+      run: |
+        # Create Xcode archive
+        xcodebuild -workspace ios/Runner.xcworkspace \
+          -scheme Runner \
+          -configuration Release \
+          -destination generic/platform=iOS \
+          -archivePath $RUNNER_TEMP/libredrop.xcarchive \
+          archive
+          
+    - name: Export IPA for App Store
+      run: |
+        # Create export options plist
+        cat > $RUNNER_TEMP/ExportOptions.plist << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>method</key>
+          <string>app-store</string>
+          <key>teamID</key>
+          <string>${{ secrets.IOS_TEAM_ID }}</string>
+          <key>uploadBitcode</key>
+          <false/>
+          <key>uploadSymbols</key>
+          <true/>
+          <key>compileBitcode</key>
+          <false/>
+        </dict>
+        </plist>
+        EOF
+        
+        # Export IPA
+        mkdir -p dist
+        xcodebuild -exportArchive \
+          -archivePath $RUNNER_TEMP/libredrop.xcarchive \
+          -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist \
+          -exportPath dist/
+          
+    - name: Upload to TestFlight
+      env:
+        APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+      run: |
+        # Create App Store Connect API key
+        mkdir -p ~/.appstoreconnect/private_keys
+        echo -n "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_API_KEY_ID.p8
+        
+        # Install xcrun altool (if needed) and upload to TestFlight
+        xcrun altool --upload-app \
+          --type ios \
+          --file "dist/libredrop.ipa" \
+          --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
+          --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
+          
+    - name: Submit to App Store Review (Optional)
+      if: github.event.inputs.submit_for_review == 'true'
+      env:
+        APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      run: |
+        # Note: This step requires additional App Store Connect API calls
+        # to submit the build for review. This is more complex and typically
+        # done manually through App Store Connect web interface.
+        echo "✅ Build uploaded to TestFlight successfully!"
+        echo "🍎 Visit App Store Connect to submit for review: https://appstoreconnect.apple.com"
+        
+    # Also create source archive for developers
+    - name: Create iOS Source Archive
+      run: |
+        VERSION=${{ needs.prepare-and-build.outputs.version }}
+        
+        # Create source archive for iOS developers who want to build locally
+        tar -czf "dist/libredrop-v$VERSION-ios-source.tar.gz" \
+          --exclude='.git*' \
+          --exclude='build/' \
+          --exclude='*.log' \
+          ios/ lib/ assets/ pubspec.yaml pubspec.lock README.md LICENSE
+          
+    - name: Upload iOS Source Archive
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.prepare-and-build.outputs.upload_url }}
+        asset_path: dist/libredrop-v${{ needs.prepare-and-build.outputs.version }}-ios-source.tar.gz
+        asset_name: libredrop-v${{ needs.prepare-and-build.outputs.version }}-ios-source.tar.gz
+        asset_content_type: application/gzip
+        
+    - name: Upload App Store IPA
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.prepare-and-build.outputs.upload_url }}
+        asset_path: dist/libredrop.ipa
+        asset_name: libredrop-v${{ needs.prepare-and-build.outputs.version }}-ios-appstore.ipa
+        asset_content_type: application/octet-stream
+        
+    - name: Clean up keychain and provisioning profile
+      if: always()
+      run: |
+        security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
+        rm -f ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision || true
 
   update-website:
     name: Update Website
-    needs: [prepare-and-build, build-windows, build-macos, build-linux]
+    needs: [prepare-and-build, build-windows, build-macos, build-linux, build-ios]
     runs-on: ubuntu-latest
     if: always() && needs.prepare-and-build.result == 'success'
     
