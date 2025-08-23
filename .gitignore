@@ -13,3 +13,9 @@ tmp
 # Mac OS
 .DS_Store
 *.bak
+APPSTORE_SETUP.md
+
+# BMad workflow files (local development only)
+docs/stories/
+.bmad-core/
+.claude/
