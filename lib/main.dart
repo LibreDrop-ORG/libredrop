@@ -812,6 +812,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+main
   @override
   void dispose() {
     _discovery?.dispose();
