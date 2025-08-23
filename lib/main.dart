@@ -322,7 +322,7 @@ class ConnectionService {
   Completer<void>? _ackCompleter;
 
   Future<void> _initWebRTC({required bool initiator}) async {
-    onLog?.call('Initializing WebRTC (initiator: $initiator)');
+    // WebRTC initialization - only log to console, not UI
     _webrtc?.dispose();
     _webrtc = WebRTCService(
       onSignal: (type, data) {
@@ -331,8 +331,8 @@ class ConnectionService {
         _socket?.writeln('WEBRTC:$msg');
         _socket?.flush();
       },
-      onConnected: () => onLog?.call('WebRTC connected'),
-      onDisconnected: () => onLog?.call('WebRTC disconnected'),
+      onConnected: () {}, // WebRTC connected - no UI log needed
+      onDisconnected: () {}, // WebRTC disconnected - no UI log needed
       onFileStarted: onFileStarted,
       onFileProgress: onFileProgress,
       onFileReceived: onFileReceived,
@@ -812,7 +812,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-
+main
   @override
   void dispose() {
     _discovery?.dispose();
@@ -825,6 +825,16 @@ class _HomePageState extends State<HomePage> {
   void _addLog(String msg) {
     if (!mounted) return;
     debugLog(msg);
+    
+    // Filter out WEBRTC and other debug messages from UI
+    final upperMsg = msg.toUpperCase();
+    if (upperMsg.startsWith('WEBRTC') || 
+        upperMsg.contains('WEBRTC SIGNAL') ||
+        upperMsg.contains('WEBRTC CONNECTED') ||
+        upperMsg.contains('WEBRTC DISCONNECTED')) {
+      return; // Don't add to UI logs
+    }
+    
     setState(() {
       _logs.add(msg);
     });
