@@ -812,59 +812,6 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  
-
-  Future<void> _showPeerSelectionDialog(File file) async {
-    if (_discovery == null || _discovery!.peers.isEmpty) {
-      _addLog('No peers discovered to share the file with.');
-      return;
-    }
-
-    final selectedPeer = await showDialog<Peer>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Select a peer to send the file'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _discovery!.peers.length,
-              itemBuilder: (context, index) {
-                final peer = _discovery!.peers[index];
-                return ListTile(
-                  leading: Icon(
-                    switch (peer.type) {
-                      'android' => Icons.android,
-                      'macos' => Icons.laptop_mac,
-                      'linux' => Icons.computer,
-                      'windows' => Icons.laptop_windows,
-                      _ => Icons.device_unknown,
-                    },
-                  ),
-                  title: Text(peer.name),
-                  subtitle: Text(peer.address.address),
-                  onTap: () => Navigator.of(context).pop(peer),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (selectedPeer != null) {
-      _sendFileToPeer(file, selectedPeer);
-    } else {
-      _addLog('File sharing cancelled by user.');
-    }
-  }
 
   @override
   void dispose() {
@@ -1009,7 +956,6 @@ class _HomePageState extends State<HomePage> {
           _buildConnectionStatus(),
           _buildPeerList(),
           _buildTransferList(),
-          _buildLogView(),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -1101,7 +1047,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildTransferList() {
     return Expanded(
-      flex: 3,
+      flex: 4,
       child: Card(
         margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
         child: Column(
@@ -1169,32 +1115,4 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildLogView() {
-    return Expanded(
-      flex: 1,
-      child: Card(
-        margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        child: Column(
-          children: [
-            const ListTile(title: Text('Logs')),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _logs.length,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0, vertical: 4.0),
-                    child: Text(
-                      _logs.reversed.toList()[index],
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
