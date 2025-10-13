@@ -13,3 +13,9 @@ tmp
 # Mac OS
 .DS_Store
 *.bak
+internal_docs
+.bmad-core/
+.claude/
+APPSTORE_SETUP.md
+docs
+lib/constants/avatars.dart
