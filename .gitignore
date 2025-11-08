@@ -19,3 +19,4 @@ internal_docs
 APPSTORE_SETUP.md
 docs
 lib/constants/avatars.dart
+test/goldens/
