@@ -13,9 +13,15 @@ tmp
 # Mac OS
 .DS_Store
 *.bak
+internal_docs
 APPSTORE_SETUP.md
 
 # BMad workflow files (local development only)
 docs/stories/
+docs/prd.md
+docs/brownfield-architecture.md
 .bmad-core/
 .claude/
+
+# Test golden files (generated)
+test/goldens/
