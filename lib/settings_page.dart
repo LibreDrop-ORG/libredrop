@@ -16,6 +16,7 @@
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, required this.currentPath});
@@ -36,9 +37,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _choosePath() async {
+    HapticFeedback.selectionClick(); // Haptic feedback for directory picker
     final dir = await FilePicker.platform.getDirectoryPath();
     if (dir != null) {
       setState(() => _path = dir);
+      HapticFeedback.lightImpact(); // Success haptic for directory selection
     }
   }
 
@@ -62,8 +65,35 @@ class _SettingsPageState extends State<SettingsPage> {
               child: const Text('Choose directory'),
             ),
             const Spacer(),
+            // Version information
+            Card(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'LibreDrop v0.3.0-beta.1',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(_path),
+              onPressed: () {
+                HapticFeedback.lightImpact(); // Haptic feedback for done button
+                Navigator.of(context).pop(_path);
+              },
               child: const Text('Done'),
             ),
           ],

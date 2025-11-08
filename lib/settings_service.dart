@@ -18,6 +18,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsService {
   static const _downloadKey = 'download_path';
+  static const _deviceNameKey = 'device_name';
+  static const _deviceAvatarKey = 'device_avatar';
 
   Future<String?> loadDownloadPath() async {
     final prefs = await SharedPreferences.getInstance();
@@ -30,6 +32,34 @@ class SettingsService {
       await prefs.remove(_downloadKey);
     } else {
       await prefs.setString(_downloadKey, path);
+    }
+  }
+
+  Future<String?> loadDeviceName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_deviceNameKey);
+  }
+
+  Future<void> saveDeviceName(String? name) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (name == null || name.isEmpty) {
+      await prefs.remove(_deviceNameKey);
+    } else {
+      await prefs.setString(_deviceNameKey, name);
+    }
+  }
+
+  Future<String?> loadDeviceAvatar() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_deviceAvatarKey);
+  }
+
+  Future<void> saveDeviceAvatar(String? avatar) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (avatar == null || avatar.isEmpty) {
+      await prefs.remove(_deviceAvatarKey);
+    } else {
+      await prefs.setString(_deviceAvatarKey, avatar);
     }
   }
 }
