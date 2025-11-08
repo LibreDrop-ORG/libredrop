@@ -758,52 +758,36 @@ class ConnectionService {
   Completer<void>? _ackCompleter;
 
   Future<void> _initWebRTC({required bool initiator}) async {
-    // Disable WebRTC entirely to avoid compatibility issues - use TCP-only transfers
-    onLog?.call('WebRTC disabled - using TCP-only transfers for all platforms');
-    _webrtc = null;
-    return;
-    
-    onLog?.call('Initializing WebRTC (initiator: $initiator)');
+    // WebRTC initialization - only log to console, not UI
     _webrtc?.dispose();
-    
-    try {
-      _webrtc = WebRTCService(
-        onSignal: (type, data) {
-          final msg = jsonEncode({'type': type, 'data': data});
-          debugLog('Sending WebRTC signal: $type'); // Keep for console debug
-          _socket?.writeln('WEBRTC:$msg');
-          _socket?.flush();
-        },
-        onConnected: () => onLog?.call('WebRTC connected'),
-        onDisconnected: () => onLog?.call('WebRTC disconnected'),
-        onFileStarted: onFileStarted,
-        onFileProgress: onFileProgress,
-        onFileReceived: onFileReceived,
-        onSendStarted: onSendStarted,
-        onSendProgress: onSendProgress,
-        onSendComplete: onSendComplete,
-        onConfigComplete: (chunkSize, bufferThreshold) {
-          // These values are passed up to the HomePageState to be displayed
-          // and are not stored directly in ConnectionService.
-          // The WebRTCService itself will store and use the negotiated values.
-          onLog?.call(
-              'Negotiated config: chunkSize=$chunkSize, bufferThreshold=$bufferThreshold');
-          // Propagate the config to the HomePageState
-          if (onConfigComplete != null) {
-            onConfigComplete!(chunkSize, bufferThreshold);
-          }
-        },
-      );
-      
-      await _webrtc!.createPeer(initiator: initiator);
-      onLog?.call('WebRTC initialized successfully');
-    } catch (e) {
-      onLog?.call('WebRTC initialization failed: $e');
-      // WebRTC failed, dispose and set to null so app can continue without WebRTC
-      _webrtc?.dispose();
-      _webrtc = null;
-      // Don't rethrow - let the app continue with TCP-only file transfers
-    }
+    _webrtc = WebRTCService(
+      onSignal: (type, data) {
+        final msg = jsonEncode({'type': type, 'data': data});
+        debugLog('Sending WebRTC signal: $type'); // Keep for console debug
+        _socket?.writeln('WEBRTC:$msg');
+        _socket?.flush();
+      },
+      onConnected: () {}, // WebRTC connected - no UI log needed
+      onDisconnected: () {}, // WebRTC disconnected - no UI log needed
+      onFileStarted: onFileStarted,
+      onFileProgress: onFileProgress,
+      onFileReceived: onFileReceived,
+      onSendStarted: onSendStarted,
+      onSendProgress: onSendProgress,
+      onSendComplete: onSendComplete,
+      onConfigComplete: (chunkSize, bufferThreshold) {
+        // These values are passed up to the HomePageState to be displayed
+        // and are not stored directly in ConnectionService.
+        // The WebRTCService itself will store and use the negotiated values.
+        onLog?.call(
+            'Negotiated config: chunkSize=$chunkSize, bufferThreshold=$bufferThreshold');
+        // Propagate the config to the HomePageState
+        if (onConfigComplete != null) {
+          onConfigComplete!(chunkSize, bufferThreshold);
+        }
+      },
+    );
+    await _webrtc!.createPeer(initiator: initiator);
   }
 
   void cancelTransfer() {
@@ -1382,7 +1366,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-
+main
   @override
   void dispose() {
     _discovery?.dispose();
@@ -1395,6 +1379,16 @@ class _HomePageState extends State<HomePage> {
   void _addLog(String msg) {
     if (!mounted) return;
     debugLog(msg);
+    
+    // Filter out WEBRTC and other debug messages from UI
+    final upperMsg = msg.toUpperCase();
+    if (upperMsg.startsWith('WEBRTC') || 
+        upperMsg.contains('WEBRTC SIGNAL') ||
+        upperMsg.contains('WEBRTC CONNECTED') ||
+        upperMsg.contains('WEBRTC DISCONNECTED')) {
+      return; // Don't add to UI logs
+    }
+    
     setState(() {
       _logs.add(msg);
     });

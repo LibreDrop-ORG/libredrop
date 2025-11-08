@@ -42,10 +42,10 @@ class SettingsService {
 
   Future<void> saveDeviceName(String? name) async {
     final prefs = await SharedPreferences.getInstance();
-    if (name == null || name.isEmpty) {
+    if (name == null || name.trim().isEmpty) {
       await prefs.remove(_deviceNameKey);
     } else {
-      await prefs.setString(_deviceNameKey, name);
+      await prefs.setString(_deviceNameKey, name.trim());
     }
   }
 
@@ -56,10 +56,10 @@ class SettingsService {
 
   Future<void> saveDeviceAvatar(String? avatar) async {
     final prefs = await SharedPreferences.getInstance();
-    if (avatar == null || avatar.isEmpty) {
+    if (avatar == null || avatar.trim().isEmpty) {
       await prefs.remove(_deviceAvatarKey);
     } else {
-      await prefs.setString(_deviceAvatarKey, avatar);
+      await prefs.setString(_deviceAvatarKey, avatar.trim());
     }
   }
 }
